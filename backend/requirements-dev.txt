@@ -1,0 +1,6 @@
+-r requirements.txt
+
+# Test-only. Production DATABASE_URL is always real Postgres (see
+# app/core/config.py) -- aiosqlite backs an in-memory DB used ONLY by
+# tests/conftest.py, never by the running app.
+aiosqlite>=0.20.0,<1

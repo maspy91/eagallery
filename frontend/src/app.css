@@ -1,0 +1,252 @@
+@import "tailwindcss";
+
+/*
+  Tailwind v4 defaults `dark:` to a @media (prefers-color-scheme) query.
+  We use manual class-based dark mode (toggled via src/lib/stores/theme.ts),
+  so this restores the v3 behavior explicitly -- without it, ThemeToggle
+  would stop having any effect.
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+  v4 has no separate JS config file -- design tokens live here and generate
+  utilities automatically (e.g. --color-primary generates bg-primary,
+  text-primary, border-primary, etc). Raw HSL-triplet values stay defined
+  as plain custom properties below (in :root/.dark) so bg-primary/40-style
+  opacity modifiers keep working; this block just maps Tailwind's expected
+  --color-* namespace onto them.
+*/
+@theme {
+	--color-border: hsl(var(--border));
+	--color-input: hsl(var(--input));
+	--color-ring: hsl(var(--ring));
+	--color-background: hsl(var(--background));
+	--color-foreground: hsl(var(--foreground));
+
+	--color-primary: hsl(var(--primary));
+	--color-primary-foreground: hsl(var(--primary-foreground));
+
+	--color-secondary: hsl(var(--secondary));
+	--color-secondary-foreground: hsl(var(--secondary-foreground));
+
+	--color-destructive: hsl(var(--destructive));
+	--color-destructive-foreground: hsl(var(--destructive-foreground));
+
+	--color-success: hsl(var(--success));
+	--color-success-foreground: hsl(var(--success-foreground));
+
+	--color-muted: hsl(var(--muted));
+	--color-muted-foreground: hsl(var(--muted-foreground));
+
+	--color-accent: hsl(var(--accent));
+	--color-accent-foreground: hsl(var(--accent-foreground));
+
+	--color-popover: hsl(var(--popover));
+	--color-popover-foreground: hsl(var(--popover-foreground));
+
+	--color-card: hsl(var(--card));
+	--color-card-foreground: hsl(var(--card-foreground));
+
+	--radius-lg: var(--radius);
+	--radius-md: calc(var(--radius) - 2px);
+	--radius-sm: calc(var(--radius) - 4px);
+
+	--animate-fade-in: fade-in 0.5s ease-out both;
+	--animate-scale-in: scale-in 0.3s ease-out both;
+}
+
+@keyframes fade-in {
+	0% {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	100% {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes scale-in {
+	0% {
+		opacity: 0;
+		transform: scale(0.96);
+	}
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+/*
+  Design tokens. All colors are HSL triplets (no hsl() wrapper) so Tailwind
+  can compose them with opacity modifiers, e.g. bg-card/40.
+
+  Brand identity carried over from the original draft: a cyan/violet duotone
+  ("Future Gallery"). Dark is the default/primary mode; light is a genuine
+  counterpart, not an inverted afterthought -- card surfaces go to true white,
+  the glass effect switches to a soft shadow instead of a glow, and the
+  cyan/violet accents are deepened so they hold contrast on a light ground.
+*/
+
+@layer base {
+	:root {
+		/* ---- Light mode ---- */
+		--background: 220 30% 98%;
+		--foreground: 222 30% 12%;
+
+		--card: 0 0% 100%;
+		--card-foreground: 222 30% 12%;
+
+		--popover: 0 0% 100%;
+		--popover-foreground: 222 30% 12%;
+
+		--primary: 191 80% 38%;
+		--primary-foreground: 0 0% 100%;
+
+		--secondary: 262 55% 48%;
+		--secondary-foreground: 0 0% 100%;
+
+		--muted: 220 20% 95%;
+		--muted-foreground: 220 10% 42%;
+
+		--accent: 191 80% 38%;
+		--accent-foreground: 0 0% 100%;
+
+		--success: 152 60% 32%;
+		--success-foreground: 0 0% 100%;
+
+		--destructive: 0 72% 45%;
+		--destructive-foreground: 0 0% 100%;
+
+		--border: 220 18% 89%;
+		--input: 220 18% 89%;
+		--ring: 191 80% 38%;
+
+		--radius: 0.75rem;
+
+		--gradient-primary: linear-gradient(135deg, hsl(191 80% 38%), hsl(262 55% 48%));
+		--gradient-subtle: linear-gradient(180deg, hsl(220 30% 98%), hsl(220 20% 95%));
+		--gradient-glow: radial-gradient(circle at center, hsl(191 80% 38% / 0.08), transparent);
+
+		--shadow-glow: 0 0 30px hsl(191 80% 38% / 0.12);
+		--shadow-elevated: 0 12px 40px hsl(222 30% 12% / 0.08);
+
+		--glass-bg: 0 0% 100%;
+		--glass-border: 222 30% 12%;
+		--glass-opacity: 0.6;
+		--glass-border-opacity: 0.08;
+
+		--transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+
+	.dark {
+		/* ---- Dark mode (original draft palette) ---- */
+		--background: 220 25% 8%;
+		--foreground: 210 40% 98%;
+
+		--card: 220 20% 12%;
+		--card-foreground: 210 40% 98%;
+
+		--popover: 220 22% 10%;
+		--popover-foreground: 210 40% 98%;
+
+		--primary: 189 85% 58%;
+		--primary-foreground: 220 25% 8%;
+
+		--secondary: 270 70% 65%;
+		--secondary-foreground: 210 40% 98%;
+
+		--muted: 220 15% 20%;
+		--muted-foreground: 215 15% 65%;
+
+		--accent: 189 85% 58%;
+		--accent-foreground: 220 25% 8%;
+
+		--success: 152 55% 45%;
+		--success-foreground: 220 25% 8%;
+
+		--destructive: 0 72% 51%;
+		--destructive-foreground: 210 40% 98%;
+
+		--border: 220 15% 18%;
+		--input: 220 15% 18%;
+		--ring: 189 85% 58%;
+
+		--gradient-primary: linear-gradient(135deg, hsl(189 85% 58%), hsl(270 70% 65%));
+		--gradient-subtle: linear-gradient(180deg, hsl(220 25% 8%), hsl(220 20% 12%));
+		--gradient-glow: radial-gradient(circle at center, hsl(189 85% 58% / 0.15), transparent);
+
+		--shadow-glow: 0 0 30px hsl(189 85% 58% / 0.3);
+		--shadow-elevated: 0 20px 60px hsl(220 25% 4% / 0.5);
+
+		--glass-bg: 220 20% 12%;
+		--glass-border: 0 0% 100%;
+		--glass-opacity: 0.4;
+		--glass-border-opacity: 0.1;
+	}
+}
+
+@layer base {
+	* {
+		@apply border-border;
+	}
+
+	body {
+		@apply bg-background text-foreground;
+		font-feature-settings:
+			'liga' 1,
+			'kern' 1;
+	}
+
+	html {
+		scroll-behavior: smooth;
+		color-scheme: light;
+	}
+
+	html.dark {
+		color-scheme: dark;
+	}
+
+	:focus-visible {
+		outline: 2px solid hsl(var(--ring));
+		outline-offset: 2px;
+	}
+}
+
+@layer utilities {
+	.glass {
+		background-color: hsl(var(--glass-bg) / var(--glass-opacity));
+		backdrop-filter: blur(20px);
+		border: 1px solid hsl(var(--glass-border) / var(--glass-border-opacity));
+	}
+
+	.glow {
+		box-shadow: var(--shadow-glow);
+	}
+
+	.elevated {
+		box-shadow: var(--shadow-elevated);
+	}
+
+	.transition-smooth {
+		transition: var(--transition-smooth);
+	}
+
+	.text-gradient {
+		background-image: var(--gradient-primary);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
