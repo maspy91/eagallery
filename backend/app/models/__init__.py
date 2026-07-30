@@ -3,4 +3,5 @@
 # alembic/env.py for autogenerate/upgrade, in addition to the dynamic
 # discover_models() scan used at app startup.
 from app.models.auth_token import AuthToken  # noqa: F401
+from app.models.photo import Photo, PhotoLike  # noqa: F401
 from app.models.user import User  # noqa: F401

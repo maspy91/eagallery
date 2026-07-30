@@ -29,7 +29,7 @@
 
 				<div class="flex items-center gap-3 pt-4 border-t border-border/40">
 					<div
-						class="w-10 h-10 shrink-0 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-xs font-semibold text-primary-foreground"
+						class="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-xs font-semibold text-primary-foreground"
 					>
 						{t.initials}
 					</div>

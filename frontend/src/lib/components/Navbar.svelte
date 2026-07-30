@@ -87,7 +87,7 @@
 				{#if $currentUser}
 					<div class="flex items-center gap-2 text-sm text-muted-foreground">
 						<div
-							class="w-8 h-8 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-xs font-semibold text-primary-foreground"
+							class="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-xs font-semibold text-primary-foreground"
 						>
 							{$currentUser.avatarInitials}
 						</div>
@@ -188,7 +188,7 @@
 					<div class="flex items-center justify-between px-3 py-2">
 						<div class="flex items-center gap-2 text-sm">
 							<div
-								class="w-8 h-8 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-xs font-semibold text-primary-foreground"
+								class="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-xs font-semibold text-primary-foreground"
 							>
 								{$currentUser.avatarInitials}
 							</div>

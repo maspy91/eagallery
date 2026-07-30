@@ -30,7 +30,7 @@ export function hasPermission(user: AppUser | null, permission: Permission): boo
 }
 
 export interface GalleryItem {
-	id: number;
+	id: string;
 	image: string;
 	title: string;
 	category: string;

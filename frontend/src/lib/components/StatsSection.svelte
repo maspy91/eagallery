@@ -33,7 +33,7 @@
 				style="animation-delay: {index * 0.1}s"
 			>
 				<div
-					class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-linear-to-br from-primary to-secondary mb-4"
+					class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-secondary mb-4"
 				>
 					<svelte:component this={stat.icon} class="w-6 h-6 text-primary-foreground" />
 				</div>

@@ -14,3 +14,4 @@ redis>=5.2.0,<6                     # Upstash Redis (redis-protocol endpoint, TL
 boto3>=1.35.0,<2                    # Cloudflare R2 (S3-compatible)
 pytest>=9.1.1,<10
 pytest-asyncio>=1.4.0,<2
+psycopg

@@ -5,16 +5,16 @@
 
 	interface FlatComment extends CommentNode {
 		photoTitle: string;
-		photoId: number;
+		photoId: string;
 	}
 
 	function flatten(): FlatComment[] {
 		const out: FlatComment[] = [];
 		for (const [photoId, nodes] of Object.entries(mockComments)) {
-			const photo = galleryItems.find((g) => g.id === Number(photoId));
+			const photo = galleryItems.find((g) => g.id === photoId);
 			const walk = (list: CommentNode[]) => {
 				for (const c of list) {
-					out.push({ ...c, photoTitle: photo?.title ?? 'Unknown', photoId: Number(photoId) });
+					out.push({ ...c, photoTitle: photo?.title ?? 'Unknown', photoId });
 					if (c.replies.length) walk(c.replies);
 				}
 			};
@@ -46,7 +46,7 @@
 		{#each comments as comment (comment.id)}
 			<div class="p-5 flex items-start gap-4">
 				<div
-					class="w-9 h-9 shrink-0 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-xs font-semibold text-primary-foreground"
+					class="w-9 h-9 shrink-0 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-xs font-semibold text-primary-foreground"
 				>
 					{comment.author.substring(0, 2).toUpperCase()}
 				</div>

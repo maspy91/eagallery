@@ -48,7 +48,7 @@
 		{#if submitted}
 			<div class="text-center mb-8">
 				<div
-					class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-linear-to-br from-primary to-secondary mb-6"
+					class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary mb-6"
 				>
 					<Mail class="w-8 h-8 text-primary-foreground" />
 				</div>
@@ -64,7 +64,7 @@
 		{:else}
 			<div class="text-center mb-8">
 				<div
-					class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-linear-to-br from-primary to-secondary mb-6"
+					class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary mb-6"
 				>
 					<UserPlus class="w-8 h-8 text-primary-foreground" />
 				</div>

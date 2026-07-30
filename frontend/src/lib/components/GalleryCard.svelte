@@ -45,7 +45,7 @@
 	</div>
 
 	<div
-		class="absolute inset-0 bg-linear-to-t from-background via-background/50 to-transparent transition-smooth"
+		class="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent transition-smooth"
 		style="opacity: {hovered ? 1 : 0.7}"
 	/>
 

@@ -5,7 +5,7 @@
 	import type { CommentNode } from '$lib/types';
 
 	interface MyThread {
-		photoId: number;
+		photoId: string;
 		photoTitle: string;
 		photoImage: string;
 		rootComment: CommentNode;
@@ -22,8 +22,7 @@
 
 	$: myThreads = ((): MyThread[] => {
 		const out: MyThread[] = [];
-		for (const [photoIdStr, nodes] of Object.entries(mockComments)) {
-			const photoId = Number(photoIdStr);
+		for (const [photoId, nodes] of Object.entries(mockComments)) {
 			const photo = galleryItems.find((g) => g.id === photoId);
 			if (!photo) continue;
 			for (const node of nodes) {

@@ -9,7 +9,7 @@ from app.core.config import get_settings
 from app.core.database import Base, engine
 from app.core.model_registry import discover_models
 from app.core.redis import redis_client
-from app.routers import admin_auth, customer_auth
+from app.routers import admin_auth, customer_auth, photos
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -64,10 +64,11 @@ app.add_middleware(
 
 app.include_router(customer_auth.router)
 app.include_router(admin_auth.router)
+app.include_router(photos.router)
 
-# Future domain routers (photos, comments, requests, analytics) get
-# included here the same way, e.g.:
-# app.include_router(photos_router)
+# Future domain routers (comments, requests, analytics) get included here
+# the same way, e.g.:
+# app.include_router(comments_router)
 
 
 @app.get("/")

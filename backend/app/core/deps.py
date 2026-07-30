@@ -50,8 +50,28 @@ async def get_current_customer(request: Request, db: AsyncSession = Depends(get_
     return await _resolve_user(request, db, CUSTOMER_COOKIE, {"customer"})
 
 
+async def get_optional_customer(request: Request, db: AsyncSession = Depends(get_db)) -> User | None:
+    """Same as get_current_customer but returns None instead of raising --
+    for endpoints that are public but behave slightly differently for a
+    logged-in customer (e.g. whether *this* viewer has liked a photo)."""
+    try:
+        return await _resolve_user(request, db, CUSTOMER_COOKIE, {"customer"})
+    except HTTPException:
+        return None
+
+
 async def get_current_staff_or_admin(request: Request, db: AsyncSession = Depends(get_db)) -> User:
     return await _resolve_user(request, db, ADMIN_COOKIE, {"admin", "staff"})
+
+
+async def get_optional_staff_or_admin(request: Request, db: AsyncSession = Depends(get_db)) -> User | None:
+    """Public endpoints (the photo gallery) show more when the viewer is
+    staff/admin -- draft and flagged items, not just published ones --
+    without requiring auth for everyone else."""
+    try:
+        return await _resolve_user(request, db, ADMIN_COOKIE, {"admin", "staff"})
+    except HTTPException:
+        return None
 
 
 async def get_current_admin(request: Request, db: AsyncSession = Depends(get_db)) -> User:

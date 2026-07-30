@@ -2,8 +2,6 @@
 __pycache__/
 *.pyc
 .env
-.env.*
-!.env.example
 .pytest_cache/
 *.egg-info/
 .venv/
@@ -12,3 +10,5 @@ scripts/
 bin/
 .ini
 .cfg
+.gitignore
+pyvenv.cfg

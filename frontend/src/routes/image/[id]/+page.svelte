@@ -1,26 +1,59 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { ArrowLeft, Eye, Heart, Share2, ExternalLink } from '@lucide/svelte';
-	import { galleryItems, mockComments } from '$lib/data/mock';
+	import { ArrowLeft, Eye, Heart, Share2, ExternalLink, LoaderCircle } from '@lucide/svelte';
+	import { mockComments } from '$lib/data/mock';
 	import CommentSection from '$lib/components/CommentSection.svelte';
 	import type { CommentNode } from '$lib/types';
+	import { currentUser } from '$lib/stores/auth';
+	import { photosApi, type ApiPhoto } from '$lib/api';
 
-	$: id = Number($page.params.id);
-	$: item = galleryItems.find((i) => i.id === id);
+	$: id = $page.params.id;
 	$: comments = (mockComments[id] ?? []) as CommentNode[];
 
-	let liked = false;
-	let currentLikes = 0;
-	let currentViews = 0;
+	let loading = true;
+	let notFound = false;
+	let item: ApiPhoto | null = null;
+	let related: ApiPhoto[] = [];
+	let likePending = false;
 
-	$: if (item) {
-		currentLikes = item.likeCount;
-		currentViews = item.viewCount + 1;
+	async function load(photoId: string) {
+		loading = true;
+		notFound = false;
+		item = null;
+		related = [];
+		try {
+			item = await photosApi.get(photoId);
+			photosApi
+				.list({ status: 'published', category: item.category, limit: 4 })
+				.then((list) => {
+					related = list.filter((r) => r.id !== item!.id).slice(0, 3);
+				})
+				.catch(() => {});
+		} catch {
+			notFound = true;
+		} finally {
+			loading = false;
+		}
 	}
 
-	function toggleLike() {
-		liked = !liked;
-		currentLikes += liked ? 1 : -1;
+	$: load(id);
+
+	async function toggleLike() {
+		if (!item || likePending) return;
+		if ($currentUser?.role !== 'customer') {
+			// Guests and admin/staff can view, but liking is a customer action.
+			window.location.href = '/login';
+			return;
+		}
+		likePending = true;
+		try {
+			const result = await photosApi.toggleLike(item.id);
+			item = { ...item, liked: result.liked, likeCount: result.likeCount };
+		} catch {
+			// swallow -- a failed like toggle isn't worth interrupting the page for
+		} finally {
+			likePending = false;
+		}
 	}
 
 	async function share() {
@@ -32,17 +65,17 @@
 			await navigator.clipboard.writeText(url);
 		}
 	}
-
-	$: related = item
-		? galleryItems.filter((i) => i.id !== item!.id && i.category === item!.category).slice(0, 3)
-		: [];
 </script>
 
 <svelte:head>
 	<title>{item ? `${item.title} — EddyArt Gallery` : 'Not found — EddyArt Gallery'}</title>
 </svelte:head>
 
-{#if !item}
+{#if loading}
+	<div class="min-h-[70vh] flex items-center justify-center">
+		<LoaderCircle class="w-8 h-8 text-primary animate-spin" />
+	</div>
+{:else if notFound || !item}
 	<div class="min-h-[70vh] flex items-center justify-center">
 		<div class="text-center">
 			<h1 class="text-4xl font-bold text-foreground mb-4">Image not found</h1>
@@ -85,7 +118,7 @@
 								<Eye class="w-5 h-5 text-primary" />
 							</div>
 							<div>
-								<p class="text-2xl font-bold text-foreground">{currentViews.toLocaleString()}</p>
+								<p class="text-2xl font-bold text-foreground">{item.viewCount.toLocaleString()}</p>
 								<p class="text-sm text-muted-foreground">Views</p>
 							</div>
 						</div>
@@ -93,14 +126,16 @@
 						<div class="flex items-center gap-3">
 							<button
 								on:click={toggleLike}
-								class="w-12 h-12 rounded-full flex items-center justify-center transition-colors {liked
+								disabled={likePending}
+								class="w-12 h-12 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 {item.liked
 									? 'bg-primary text-primary-foreground'
 									: 'bg-primary/10 text-primary hover:bg-primary/20'}"
+								aria-label={item.liked ? 'Unlike' : 'Like'}
 							>
-								<Heart class="w-5 h-5 {liked ? 'fill-current' : ''}" />
+								<Heart class="w-5 h-5 {item.liked ? 'fill-current' : ''}" />
 							</button>
 							<div>
-								<p class="text-2xl font-bold text-foreground">{currentLikes.toLocaleString()}</p>
+								<p class="text-2xl font-bold text-foreground">{item.likeCount.toLocaleString()}</p>
 								<p class="text-sm text-muted-foreground">Likes</p>
 							</div>
 						</div>
@@ -140,7 +175,7 @@
 								>
 									<img src={r.image} alt={r.title} class="w-full h-full object-cover" />
 									<div
-										class="absolute inset-0 bg-linear-to-t from-background/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3"
+										class="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3"
 									>
 										<p class="text-sm font-semibold text-foreground">{r.title}</p>
 									</div>
@@ -157,7 +192,7 @@
 					<ExternalLink class="w-5 h-5" />
 				</button>
 
-				<CommentSection bind:comments />
+				<CommentSection {comments} />
 			</div>
 		</div>
 	</main>

@@ -45,7 +45,7 @@
 	<div class="glass rounded-xl p-4 space-y-3">
 		<div class="flex items-start gap-3">
 			<div
-				class="w-10 h-10 shrink-0 rounded-full ring-2 ring-primary/20 bg-linear-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground font-semibold text-sm"
+				class="w-10 h-10 shrink-0 rounded-full ring-2 ring-primary/20 bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground font-semibold text-sm"
 			>
 				{comment.author.substring(0, 2).toUpperCase()}
 			</div>

@@ -1,11 +1,12 @@
-# EddyArt Gallery — SvelteKit frontend (Phase 2: auth wired to FastAPI)
+# EddyArt Gallery — SvelteKit frontend (Phase 2: auth + photo management wired to FastAPI)
 
 SvelteKit conversion of the original React/Vite draft. Phase 1 was UI-only on
-mock data. **Phase 2 (this state) wires real authentication and authorization
-to the FastAPI backend** — registration, email verification, login/logout,
-password recovery, and staff invites all hit real endpoints and set real
-httpOnly session cookies. Everything else (photos, comments, conversations,
-notifications) is still mock/in-memory, pending later phases.
+mock data. Phase 2 wires real authentication/authorization and **real photo
+management** to the FastAPI backend — registration, email verification,
+login/logout, password recovery, staff invites, and now photo upload,
+publishing, likes, and view counts all hit real endpoints and real storage
+(Cloudflare R2 + Neon Postgres). Comments, conversations, and notifications
+are still mock/in-memory, pending a later phase.
 
 ## Run it
 
@@ -47,9 +48,11 @@ which really does email a single-use, time-limited token now.
 | Forgot / reset password (shared by both account types) | **Real** — single-use, time-limited tokens |
 | Session | **Real** — httpOnly cookie, not localStorage/sessionStorage |
 | Admin/customer route guards | Client-side only (see below) |
-| Gallery grid, image detail, comments UI | Real UI, mock data |
-| Admin dashboard (photos/comments/requests), customer dashboard | Real UI, mock data, in-memory only |
-| Photo storage | Not wired — no R2 client yet |
+| Photo upload, publish/draft/flag, edit, delete | **Real** — direct-to-R2 presigned upload, gated by `photos:manage` |
+| Gallery grid (Featured Collection), image detail page | **Real** — fetched from `/api/photos`, random 9 picked server-side |
+| Photo view counts, likes | **Real** — view count increments server-side on fetch; likes require a customer session |
+| Comments UI on the image detail page | Real UI, still mock data (not yet tied to real photo IDs) |
+| Admin dashboard (comments, requests), customer dashboard (notifications/inbox/conversations) | Real UI, mock data, in-memory only |
 | Turnstile / bot protection | Wired end-to-end but `TURNSTILE_ENABLED=False` by default — see backend `.env.example` |
 
 ## Roles

@@ -33,6 +33,34 @@ proxy. That means:
 - **Upstash**: create a Redis database, copy the **Redis protocol** URL
   (`rediss://default:password@....upstash.io:6379`) — not the REST API URL.
 
+## 1b. Provision Cloudflare R2 (photo storage)
+
+Photo uploads go **directly from the admin's browser to R2** using a
+presigned URL the backend generates (`POST /api/photos/upload-url`) — the
+file bytes never pass through the FastAPI server. This means:
+
+- Create an R2 bucket, an API token (Account ID, Access Key ID, Secret
+  Access Key) with read/write on that bucket, and set
+  `R2_ACCOUNT_ID`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`/`R2_BUCKET`.
+- Enable public access on the bucket (or a custom domain) and set
+  `R2_PUBLIC_URL` to that base URL — this is what gets served back as each
+  photo's `image` field.
+- **Required: set CORS on the bucket**, or the browser will reject the
+  direct `PUT` with a CORS error even though the presigned URL itself is
+  valid. In the Cloudflare dashboard → R2 → your bucket → Settings → CORS
+  Policy, add:
+  ```json
+  [
+    {
+      "AllowedOrigins": ["http://localhost:5173", "https://your-app.vercel.app"],
+      "AllowedMethods": ["PUT"],
+      "AllowedHeaders": ["Content-Type"],
+      "MaxAgeSeconds": 3000
+    }
+  ]
+  ```
+  Update `AllowedOrigins` whenever you add a new frontend domain.
+
 ## 2. Deploy the backend to Render
 
 **Option A — Blueprint (recommended):** push this repo, then in the Render
@@ -81,9 +109,14 @@ pytest                                # runs against an in-memory sqlite DB + fa
 This exercises the full flows end to end: register → blocked before
 verify → verify → session → me → logout; forgot → reset → old password
 rejected, new one works; admin bootstrap → staff invite → accept → login →
-permission boundary (staff can't manage roles) → revoke; and confirms the
+permission boundary (staff can't manage roles) → revoke; confirms the
 customer and admin login endpoints never cross-validate each other's
-credentials. See `tests/test_customer_auth.py` and `tests/test_admin_auth.py`.
+credentials; and (see `tests/test_photos.py`) upload → draft →
+publish → view-count increments → like/unlike → edit → delete-with-R2-
+cleanup, plus that drafts/flagged photos 404 for the public and that a
+customer session can't call any `photos:manage` endpoint. R2 itself is
+monkeypatched in these tests (no real bucket needed to run them) — see
+`tests/test_photos.py::fake_storage`.
 
 Then run it for real, against your actual Neon/Upstash (or a local Postgres
 + Redis if you have them):
@@ -117,6 +150,24 @@ Manual smoke test in the browser at http://localhost:5173:
    shows a 403 from the staff list call.
 6. Back as admin, revoke the staff account → confirm they can no longer log
    in at `/auth`.
+7. Still as admin, **Photos** → Upload photo → pick an image → it uploads
+   directly to R2 (check the Network tab: a `PUT` to your R2 domain, not to
+   the Render backend) and appears in the table as `draft` → an edit dialog
+   pops up automatically — fill in a title/category → Save.
+8. Click the `draft` badge to cycle it to `published` → open `/` in a new
+   tab → the photo can now appear in Featured Collection (it's a random 9,
+   so refresh a few times if you have more than 9 published).
+9. Open the photo's detail page (`/image/<id>`) → view count should read at
+   least 1 (it increments server-side on every fetch) → as a customer (not
+   admin), click the like button → count goes up, button fills in → click
+   again → unlikes.
+10. Back in admin **Photos**, click the badge again to cycle to `flagged` →
+    confirm the photo disappears from `/` and its detail page now 404s for
+    a logged-out visitor, but staff/admin can still see it via **Photos**.
+11. Delete a photo from the admin table → confirm it's gone from the list
+    and its detail page now 404s. (The R2 object is deleted best-effort in
+    the background — see `app/routers/photos.py::delete_photo` — a failure
+    there doesn't block the row from being deleted.)
 
 ### After deploying to Render + Vercel
 
@@ -139,6 +190,9 @@ curl -i -X POST "$BASE/api/customer/verify-email" \
   -H "Content-Type: application/json" \
   -d '{"token":"PASTE_TOKEN_HERE"}' -c cookies.txt
 curl -i -b cookies.txt "$BASE/api/customer/me"
+
+# Public photo listing (published only) -- works even with an empty catalog
+curl -i "$BASE/api/photos?random=9"
 ```
 
 ## Rotating the admin password

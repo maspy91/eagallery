@@ -111,3 +111,61 @@ export const passwordApi = {
 	forgot: (email: string) => post<MessageResponse>('/api/auth/forgot-password', { email }),
 	reset: (token: string, password: string) => post<MessageResponse>('/api/auth/reset-password', { token, password })
 };
+
+// ---- Photos (/api/photos/*) ----
+
+export interface ApiPhoto {
+	id: string;
+	image: string;
+	title: string;
+	category: string;
+	viewCount: number;
+	likeCount: number;
+	description: string;
+	specs: string[];
+	status: 'draft' | 'published' | 'flagged';
+	liked: boolean;
+}
+
+export interface PhotoListParams {
+	status?: 'draft' | 'published' | 'flagged';
+	category?: string;
+	random?: number;
+	limit?: number;
+}
+
+function buildQuery(params: Record<string, string | number | undefined>): string {
+	const usp = new URLSearchParams();
+	for (const [key, value] of Object.entries(params)) {
+		if (value !== undefined && value !== null && value !== '') usp.set(key, String(value));
+	}
+	const qs = usp.toString();
+	return qs ? `?${qs}` : '';
+}
+
+export const photosApi = {
+	list: (params: PhotoListParams = {}) => get<ApiPhoto[]>(`/api/photos${buildQuery(params)}`),
+	get: (id: string) => get<ApiPhoto>(`/api/photos/${id}`),
+	getUploadUrl: (filename: string, contentType: string) =>
+		post<{ objectKey: string; uploadUrl: string; publicUrl: string }>('/api/photos/upload-url', {
+			filename,
+			content_type: contentType
+		}),
+	create: (input: { objectKey: string; title: string; category: string; description: string; specs: string[] }) =>
+		post<ApiPhoto>('/api/photos', input),
+	update: (
+		id: string,
+		input: Partial<{ title: string; category: string; description: string; specs: string[]; status: string }>
+	) => request<ApiPhoto>(`/api/photos/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+	remove: (id: string) => del<MessageResponse>(`/api/photos/${id}`),
+	toggleLike: (id: string) => post<{ liked: boolean; likeCount: number }>(`/api/photos/${id}/like`, {}),
+	/**
+	 * Uploads a file directly to R2 with the presigned URL from
+	 * getUploadUrl(). Deliberately NOT routed through `request()` above --
+	 * this goes straight to R2, not this backend, and isn't JSON.
+	 */
+	uploadToStorage: async (uploadUrl: string, file: File) => {
+		const res = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+		if (!res.ok) throw new ApiError(res.status, 'Upload to storage failed');
+	}
+};

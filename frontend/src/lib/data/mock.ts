@@ -17,7 +17,7 @@ export { default as heroBanner } from '$lib/assets/hero-banner.jpg';
 
 export const galleryItems: GalleryItem[] = [
 	{
-		id: 1,
+		id: '1',
 		image: gallery1,
 		title: 'SmartWatch Pro',
 		category: 'Wearable Tech',
@@ -29,7 +29,7 @@ export const galleryItems: GalleryItem[] = [
 		status: 'published'
 	},
 	{
-		id: 2,
+		id: '2',
 		image: gallery2,
 		title: 'AirPods Ultra',
 		category: 'Audio',
@@ -40,7 +40,7 @@ export const galleryItems: GalleryItem[] = [
 		status: 'published'
 	},
 	{
-		id: 3,
+		id: '3',
 		image: gallery3,
 		title: 'NeoBook Air',
 		category: 'Computing',
@@ -51,7 +51,7 @@ export const galleryItems: GalleryItem[] = [
 		status: 'published'
 	},
 	{
-		id: 4,
+		id: '4',
 		image: gallery4,
 		title: 'Quantum Phone',
 		category: 'Mobile',
@@ -62,7 +62,7 @@ export const galleryItems: GalleryItem[] = [
 		status: 'published'
 	},
 	{
-		id: 5,
+		id: '5',
 		image: gallery5,
 		title: 'VR Headset X',
 		category: 'Virtual Reality',
@@ -73,7 +73,7 @@ export const galleryItems: GalleryItem[] = [
 		status: 'draft'
 	},
 	{
-		id: 6,
+		id: '6',
 		image: gallery6,
 		title: 'Smart Glasses',
 		category: 'Augmented Reality',
@@ -84,7 +84,7 @@ export const galleryItems: GalleryItem[] = [
 		status: 'flagged'
 	},
 	{
-		id: 7,
+		id: '7',
 		image: gallery1,
 		title: 'Pulse Band 3',
 		category: 'Wearable Tech',
@@ -95,7 +95,7 @@ export const galleryItems: GalleryItem[] = [
 		status: 'published'
 	},
 	{
-		id: 8,
+		id: '8',
 		image: gallery2,
 		title: 'SoundCore Buds',
 		category: 'Audio',
@@ -106,7 +106,7 @@ export const galleryItems: GalleryItem[] = [
 		status: 'published'
 	},
 	{
-		id: 9,
+		id: '9',
 		image: gallery3,
 		title: 'NeoBook Studio',
 		category: 'Computing',
@@ -117,7 +117,7 @@ export const galleryItems: GalleryItem[] = [
 		status: 'published'
 	},
 	{
-		id: 10,
+		id: '10',
 		image: gallery4,
 		title: 'Quantum Phone Mini',
 		category: 'Mobile',
@@ -128,7 +128,7 @@ export const galleryItems: GalleryItem[] = [
 		status: 'published'
 	},
 	{
-		id: 11,
+		id: '11',
 		image: gallery5,
 		title: 'VR Headset X Lite',
 		category: 'Virtual Reality',
@@ -139,7 +139,7 @@ export const galleryItems: GalleryItem[] = [
 		status: 'published'
 	},
 	{
-		id: 12,
+		id: '12',
 		image: gallery6,
 		title: 'Smart Glasses Air',
 		category: 'Augmented Reality',
@@ -150,7 +150,7 @@ export const galleryItems: GalleryItem[] = [
 		status: 'published'
 	},
 	{
-		id: 13,
+		id: '13',
 		image: gallery1,
 		title: 'SmartWatch SE',
 		category: 'Wearable Tech',
@@ -161,7 +161,7 @@ export const galleryItems: GalleryItem[] = [
 		status: 'published'
 	},
 	{
-		id: 14,
+		id: '14',
 		image: gallery3,
 		title: 'NeoBook Flex',
 		category: 'Computing',
@@ -236,7 +236,7 @@ export const testimonials: Testimonial[] = [
 	}
 ];
 
-export const mockComments: Record<number, CommentNode[]> = {
+export const mockComments: Record<string, CommentNode[]> = {
 	1: [
 		{
 			id: 1,
