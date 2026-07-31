@@ -51,7 +51,7 @@ def _set_admin_cookie(response: Response, user: User) -> None:
         value=token,
         httponly=True,
         secure=settings.cookie_secure,
-        samesite=settings.COOKIE_SAMESITE,
+        samesite=settings.cookie_samesite,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
