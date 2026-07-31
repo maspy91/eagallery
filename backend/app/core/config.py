@@ -18,13 +18,10 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_samesite: str = "lax"
 
-    # COOKIE_SAMESITE: str = "lax"
-    # COOKIE_SECURE: bool = False
-
     # ---- Application ----
     APP_NAME: str = "Future Gallery"
     DEBUG: bool = False
-    FRONTEND_URL: str = "http://localhost:5173"
+    FRONTEND_URL: str
 
     # ---- Database (Neon Postgres) ----
     DATABASE_URL: str
@@ -45,6 +42,7 @@ class Settings(BaseSettings):
     # ---- Email (Mailtrap in staging, real sender in prod) ----
     EMAIL_VERIFICATION_TOKEN_TTL_HOURS: int = 24
     PASSWORD_RESET_TOKEN_TTL_MINUTES: int = 30
+
     SMTP_HOST: str = "sandbox.smtp.mailtrap.io"
     SMTP_PORT: int = 2525
     SMTP_USERNAME: str | None = None
@@ -52,8 +50,7 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = "noreply@futuregallery.app"
     SMTP_FROM_NAME: str = "Future Gallery"
     SMTP_STARTTLS: bool = True
-#    SMTP_USE_TLS: bool = True
-
+#   
     # ---- Supabase Storage (Photo Storage) ----
     SUPABASE_URL: str | None = None
     SUPABASE_KEY: str | None = None  # Service role key recommended for backend operations
@@ -65,7 +62,7 @@ class Settings(BaseSettings):
     AI_RATE_LIMIT_WINDOW_MINUTES: int = 60
 
     # ---- CORS ----
-    ALLOWED_ORIGINS: str = "http://localhost:5173"
+    ALLOWED_ORIGINS: str
 
     # ---- Admin bootstrap ----
     ADMIN_EMAIL: str | None = None
