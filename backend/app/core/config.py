@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_REGISTER_WINDOW_MINUTES: int = 60
 
 
-    ALLOWED_ORIGINS: str = "http://localhost:5173,https://eagallery.vercel.app"
+    ALLOWED_ORIGINS: str = "http://localhost:5173,https://eagallery-589t.vercel.app/"
 
     @property
     def allowed_origins_list(self) -> list[str]:
