@@ -73,14 +73,10 @@ class Settings(BaseSettings):
 
 
     ALLOWED_ORIGINS: str = "http://localhost:5173,https://eagallery-589t.vercel.app/"
-
     @property
     def allowed_origins_list(self) -> list[str]:
-        return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
-
-    # @property
-    # def allowed_origins_list(self) -> list[str]:
-    #     return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+        # .rstrip("/") removes any accidental trailing slashes!
+        return [origin.strip().rstrip("/") for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
 
     @model_validator(mode="after")
     def _validate_turnstile(self):
