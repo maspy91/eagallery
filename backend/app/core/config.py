@@ -61,9 +61,6 @@ class Settings(BaseSettings):
     AI_RATE_LIMIT_MAX_REQUESTS: int = 20
     AI_RATE_LIMIT_WINDOW_MINUTES: int = 60
 
-    # ---- CORS ----
-    ALLOWED_ORIGINS: str
-
     # ---- Admin bootstrap ----
     ADMIN_EMAIL: str | None = None
     ADMIN_PASSWORD: str | None = None
@@ -74,9 +71,16 @@ class Settings(BaseSettings):
     RATE_LIMIT_REGISTER_MAX_ATTEMPTS: int = 5
     RATE_LIMIT_REGISTER_WINDOW_MINUTES: int = 60
 
+
+    ALLOWED_ORIGINS: str = "http://localhost:5173,https://eagallery.vercel.app"
+
     @property
     def allowed_origins_list(self) -> list[str]:
-        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+        return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
+
+    # @property
+    # def allowed_origins_list(self) -> list[str]:
+    #     return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
 
     @model_validator(mode="after")
     def _validate_turnstile(self):
