@@ -239,13 +239,13 @@ export const testimonials: Testimonial[] = [
 export const mockComments: Record<string, CommentNode[]> = {
 	1: [
 		{
-			id: 1,
+			id: '1',
 			author: 'Sarah Chen',
 			text: 'This looks absolutely incredible! The design is so sleek and futuristic.',
 			timestamp: '2 hours ago',
 			replies: [
 				{
-					id: 2,
+					id: '2',
 					author: 'Mike Johnson',
 					text: 'I agree! The specs are really impressive too.',
 					timestamp: '1 hour ago',
@@ -254,14 +254,14 @@ export const mockComments: Record<string, CommentNode[]> = {
 			]
 		},
 		{
-			id: 3,
+			id: '3',
 			author: 'Lena Ortiz',
 			authorId: 'c1',
 			text: 'Has anyone tried this yet? Would love real-world feedback on performance.',
 			timestamp: '5 hours ago',
 			replies: [
 				{
-					id: 4,
+					id: '4',
 					author: 'Jordan Blake',
 					text: "Yes! We tested it in-house — battery holds up well under daily use.",
 					timestamp: '3 hours ago',
@@ -272,7 +272,7 @@ export const mockComments: Record<string, CommentNode[]> = {
 	],
 	4: [
 		{
-			id: 5,
+			id: '5',
 			author: 'Lena Ortiz',
 			authorId: 'c1',
 			text: 'Does the Quantum Phone ship internationally? Looking to order from outside the US.',
@@ -307,7 +307,7 @@ export const mockCustomers: AppUser[] = [
  */
 export const mockConversations: BusinessConversation[] = [
 	{
-		id: 1,
+		id: '1',
 		customerId: 'c1',
 		customerName: 'Lena Ortiz',
 		customerEmail: 'lena@example.com',
@@ -316,14 +316,14 @@ export const mockConversations: BusinessConversation[] = [
 		updatedAt: '2026-07-21T14:12:00Z',
 		messages: [
 			{
-				id: 1,
+				id: '1',
 				senderRole: 'customer',
 				senderName: 'Lena Ortiz',
 				text: 'Interested in licensing 12 images for a print catalog. What are your commercial terms?',
 				timestamp: '2026-07-21T14:12:00Z'
 			},
 			{
-				id: 2,
+				id: '2',
 				senderRole: 'admin',
 				senderName: 'Admin',
 				text: 'Thanks for reaching out — commercial licensing starts at $80/image for print use. Sending the full rate sheet by email shortly.',
@@ -332,7 +332,7 @@ export const mockConversations: BusinessConversation[] = [
 		]
 	},
 	{
-		id: 2,
+		id: '2',
 		customerId: 'c2',
 		customerName: 'Omar Haddad',
 		customerEmail: 'omar@studiolumen.io',
@@ -341,14 +341,14 @@ export const mockConversations: BusinessConversation[] = [
 		updatedAt: '2026-07-19T09:03:00Z',
 		messages: [
 			{
-				id: 1,
+				id: '1',
 				senderRole: 'customer',
 				senderName: 'Omar Haddad',
 				text: 'We run a design studio and would love to feature your gallery in a joint showcase.',
 				timestamp: '2026-07-19T09:03:00Z'
 			},
 			{
-				id: 2,
+				id: '2',
 				senderRole: 'staff',
 				senderName: 'Priya Nair',
 				text: "We'd love that too — I've forwarded this to our partnerships lead, expect an email this week.",

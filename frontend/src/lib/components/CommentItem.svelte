@@ -1,4 +1,10 @@
 <script lang="ts">
+	// frontend/src/lib/components/CommentItem.svelte
+	// EDITED FILE — replaces: src/lib/components/CommentItem.svelte (whole-file replacement)
+	// Only change: the reply event's `commentId` is now `string` (matches
+	// CommentNode.id, which moved from number to string to hold real backend
+	// UUIDs). No visual/behavioral changes.
+
 	import { Reply, Send } from '@lucide/svelte';
 	import type { CommentNode } from '$lib/types';
 	import { createEventDispatcher } from 'svelte';
@@ -6,7 +12,7 @@
 	export let comment: CommentNode;
 	export let depth = 0;
 
-	const dispatch = createEventDispatcher<{ reply: { commentId: number; text: string } }>();
+	const dispatch = createEventDispatcher<{ reply: { commentId: string; text: string } }>();
 
 	let showReplyForm = false;
 	let replyText = '';
@@ -36,7 +42,7 @@
 		}, 300);
 	}
 
-	function forwardReply(e: CustomEvent<{ commentId: number; text: string }>) {
+	function forwardReply(e: CustomEvent<{ commentId: string; text: string }>) {
 		dispatch('reply', e.detail);
 	}
 </script>

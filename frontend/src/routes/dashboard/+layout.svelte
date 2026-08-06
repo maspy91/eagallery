@@ -1,9 +1,15 @@
 <script lang="ts">
+	// frontend/src/routes/dashboard/+layout.svelte
+	// EDITED FILE — replaces: src/routes/dashboard/+layout.svelte (whole-file replacement)
+	// Only change: unreadCount now reads from the real notifications store
+	// instead of mockNotifications. Everything else (the route guard,
+	// layout, nav items) is unchanged.
+
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { currentUser, authChecked } from '$lib/stores/auth';
-	import { mockNotifications } from '$lib/data/mock';
+	import { unreadCount as unreadCountStore } from '$lib/stores/notifications';
 	import { LayoutDashboard, Bell, Inbox, MessagesSquare, ArrowLeft } from '@lucide/svelte';
 
 	// PHASE 1 NOTE (still true in Phase 2): this is a client-side guard,
@@ -26,9 +32,7 @@
 		return unsub;
 	});
 
-	$: unreadCount = $currentUser
-		? mockNotifications.filter((n) => n.userId === $currentUser!.id && !n.read).length
-		: 0;
+	$: unreadCount = $currentUser ? $unreadCountStore : 0;
 
 	$: navItems = [
 		{ href: '/dashboard', label: 'Overview', icon: LayoutDashboard },

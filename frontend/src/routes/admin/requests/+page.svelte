@@ -1,42 +1,74 @@
 <script lang="ts">
-	import { mockConversations } from '$lib/data/mock';
-	import { currentUser } from '$lib/stores/auth';
-	import type { BusinessConversation } from '$lib/types';
-	import { Mail, Send, CircleCheckBig } from '@lucide/svelte';
+	// frontend/src/routes/admin/requests/+page.svelte
+	// EDITED FILE — replaces: src/routes/admin/requests/+page.svelte (whole-file replacement)
+	// Replaced the in-memory `[...mockConversations]` copy with GET
+	// /api/conversations (requests:respond). send()/resolve() now call the
+	// real reply/status endpoints instead of mutating local state directly.
 
-	let conversations: BusinessConversation[] = [...mockConversations];
-	let selected: BusinessConversation | null = conversations[0] ?? null;
+	import { onMount } from 'svelte';
+	import { Mail, Send, CircleCheckBig, LoaderCircle } from '@lucide/svelte';
+	import { conversationsApi, ApiError, type ApiConversation } from '$lib/api';
+
+	let conversations: ApiConversation[] = [];
+	let loading = true;
+	let loadError = '';
+	let selected: ApiConversation | null = null;
 	let reply = '';
+	let sending = false;
+	let formError = '';
 
-	const statusStyle: Record<BusinessConversation['status'], string> = {
+	const statusStyle: Record<ApiConversation['status'], string> = {
 		new: 'bg-primary/10 text-primary',
 		in_progress: 'bg-secondary/10 text-secondary',
 		resolved: 'bg-success/10 text-success'
 	};
 
-	function select(c: BusinessConversation) {
+	async function load() {
+		loading = true;
+		loadError = '';
+		try {
+			conversations = await conversationsApi.listAll();
+			if (!selected && conversations.length > 0) selected = conversations[0];
+		} catch (err) {
+			loadError = err instanceof ApiError ? err.message : 'Could not load requests.';
+		} finally {
+			loading = false;
+		}
+	}
+
+	onMount(load);
+
+	function select(c: ApiConversation) {
 		selected = c;
 		reply = '';
+		formError = '';
 	}
 
-	function send() {
-		if (!selected || !reply.trim() || !$currentUser) return;
-		selected.messages.push({
-			id: selected.messages.length + 1,
-			senderRole: $currentUser.role as 'admin' | 'staff',
-			senderName: $currentUser.name,
-			text: reply.trim(),
-			timestamp: new Date().toISOString()
-		});
-		if (selected.status === 'new') selected.status = 'in_progress';
-		selected = { ...selected };
-		reply = '';
+	async function send() {
+		if (!selected || !reply.trim()) return;
+		sending = true;
+		formError = '';
+		try {
+			const updated = await conversationsApi.reply(selected.id, reply.trim());
+			conversations = conversations.map((c) => (c.id === updated.id ? updated : c));
+			selected = updated;
+			reply = '';
+		} catch (err) {
+			formError = err instanceof ApiError ? err.message : 'Could not send your reply.';
+		} finally {
+			sending = false;
+		}
 	}
 
-	function resolve() {
+	async function resolve() {
 		if (!selected) return;
-		selected.status = 'resolved';
-		selected = { ...selected };
+		try {
+			const updated = await conversationsApi.setStatus(selected.id, 'resolved');
+			conversations = conversations.map((c) => (c.id === updated.id ? updated : c));
+			selected = updated;
+		} catch (err) {
+			formError = err instanceof ApiError ? err.message : 'Could not update status.';
+		}
 	}
 </script>
 
@@ -53,22 +85,30 @@
 
 	<div class="grid lg:grid-cols-[320px_1fr] gap-6">
 		<div class="glass elevated rounded-xl divide-y divide-border/60 overflow-hidden">
-			{#each conversations as c (c.id)}
-				<button
-					on:click={() => select(c)}
-					class="w-full text-left p-4 transition-colors {selected?.id === c.id ? 'bg-primary/5' : 'hover:bg-muted/40'}"
-				>
-					<div class="flex items-center justify-between gap-2">
-						<span class="font-medium text-foreground text-sm truncate">{c.customerName}</span>
-						<span class="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium capitalize {statusStyle[c.status]}">
-							{c.status.replace('_', ' ')}
-						</span>
-					</div>
-					<p class="text-sm text-muted-foreground truncate mt-0.5">{c.subject}</p>
-				</button>
-			{/each}
-			{#if conversations.length === 0}
-				<p class="text-center text-muted-foreground py-12 px-4">No requests yet.</p>
+			{#if loading}
+				<p class="text-center text-muted-foreground py-12 px-4">
+					<LoaderCircle class="w-4 h-4 animate-spin inline-block mr-2" />
+					Loading…
+				</p>
+			{:else if loadError}
+				<p class="text-center text-destructive py-12 px-4">{loadError}</p>
+			{:else}
+				{#each conversations as c (c.id)}
+					<button
+						on:click={() => select(c)}
+						class="w-full text-left p-4 transition-colors {selected?.id === c.id ? 'bg-primary/5' : 'hover:bg-muted/40'}"
+					>
+						<div class="flex items-center justify-between gap-2">
+							<span class="font-medium text-foreground text-sm truncate">{c.customerName}</span>
+							<span class="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium capitalize {statusStyle[c.status]}">
+								{c.status.replace('_', ' ')}
+							</span>
+						</div>
+						<p class="text-sm text-muted-foreground truncate mt-0.5">{c.subject}</p>
+					</button>
+				{:else}
+					<p class="text-center text-muted-foreground py-12 px-4">No requests yet.</p>
+				{/each}
 			{/if}
 		</div>
 
@@ -111,13 +151,16 @@
 						placeholder="Write your response..."
 						class="w-full min-h-[100px] resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					/>
+					{#if formError}
+						<p class="text-sm text-destructive">{formError}</p>
+					{/if}
 					<div class="flex gap-2">
 						<button
 							on:click={send}
-							disabled={!reply.trim()}
+							disabled={!reply.trim() || sending}
 							class="flex items-center gap-2 px-4 py-2.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity text-sm font-medium"
 						>
-							<Send class="w-4 h-4" />
+							{#if sending}<LoaderCircle class="w-4 h-4 animate-spin" />{:else}<Send class="w-4 h-4" />{/if}
 							Send reply
 						</button>
 						{#if selected.status !== 'resolved'}
@@ -130,10 +173,6 @@
 							</button>
 						{/if}
 					</div>
-					<p class="text-xs text-muted-foreground">
-						Phase 2: sends via the transactional email service (Mailtrap in staging) and the customer sees this
-						reply in their dashboard Inbox in real time.
-					</p>
 				</div>
 			{:else}
 				<p class="text-center text-muted-foreground py-12">Select a request to view it.</p>

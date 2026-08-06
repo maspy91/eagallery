@@ -1,16 +1,22 @@
 <script lang="ts">
+	// frontend/src/lib/components/Navbar.svelte
+	// EDITED FILE — replaces: src/lib/components/Navbar.svelte (whole-file replacement)
+	// Only change to this block: unreadCount is now read from the real
+	// notifications store instead of mockNotifications. The store itself
+	// is populated by stores/auth.ts on session restore/login, so Navbar
+	// doesn't need its own fetch -- it just reads whatever's already
+	// there. Everything below this script block is unchanged.
+
 	import { page } from '$app/stores';
 	import { currentUser, logout } from '$lib/stores/auth';
-	import { mockNotifications } from '$lib/data/mock';
+	import { unreadCount as unreadCountStore } from '$lib/stores/notifications';
 	import ThemeToggle from './ThemeToggle.svelte';
 	import { Shield, LogOut, LayoutDashboard, Menu, X, Bell, User } from '@lucide/svelte';
 
 	$: isStaffOrAdmin = $currentUser?.role === 'admin' || $currentUser?.role === 'staff';
 	$: isCustomer = $currentUser?.role === 'customer';
 
-	$: unreadCount = isCustomer
-		? mockNotifications.filter((n) => n.userId === $currentUser!.id && !n.read).length
-		: 0;
+	$: unreadCount = isCustomer ? $unreadCountStore : 0;
 
 	let mobileOpen = false;
 	$: $page.url.pathname, (mobileOpen = false);

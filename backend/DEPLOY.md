@@ -33,33 +33,28 @@ proxy. That means:
 - **Upstash**: create a Redis database, copy the **Redis protocol** URL
   (`rediss://default:password@....upstash.io:6379`) — not the REST API URL.
 
-## 1b. Provision Cloudflare R2 (photo storage)
+## 1b. Provision Supabase Storage (photo storage)
 
-Photo uploads go **directly from the admin's browser to R2** using a
-presigned URL the backend generates (`POST /api/photos/upload-url`) — the
-file bytes never pass through the FastAPI server. This means:
+Photo uploads go **directly from the admin's browser to Supabase Storage**
+using a signed upload URL the backend generates (`POST
+/api/photos/upload-url`) — the file bytes never pass through the FastAPI
+server. This means:
 
-- Create an R2 bucket, an API token (Account ID, Access Key ID, Secret
-  Access Key) with read/write on that bucket, and set
-  `R2_ACCOUNT_ID`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`/`R2_BUCKET`.
-- Enable public access on the bucket (or a custom domain) and set
-  `R2_PUBLIC_URL` to that base URL — this is what gets served back as each
-  photo's `image` field.
-- **Required: set CORS on the bucket**, or the browser will reject the
-  direct `PUT` with a CORS error even though the presigned URL itself is
-  valid. In the Cloudflare dashboard → R2 → your bucket → Settings → CORS
-  Policy, add:
-  ```json
-  [
-    {
-      "AllowedOrigins": ["http://localhost:5173", "https://your-app.vercel.app"],
-      "AllowedMethods": ["PUT"],
-      "AllowedHeaders": ["Content-Type"],
-      "MaxAgeSeconds": 3000
-    }
-  ]
-  ```
-  Update `AllowedOrigins` whenever you add a new frontend domain.
+- Create a Supabase project and a Storage bucket (e.g. `photos`).
+- Set `SUPABASE_URL`, `SUPABASE_KEY` (the **service role** key, not the
+  anon key — the backend needs write access), and
+  `SUPABASE_STORAGE_BUCKET`. All three are required together; the app
+  refuses to start with only some of them set (see `app/core/config.py`).
+- Make the bucket public (or serve it through a custom domain) so
+  `public_url()` in `app/core/storage.py` resolves to something the
+  browser can actually load.
+- **Verify the upload flow specifically after any Supabase project
+  changes** — signed-upload-URL semantics aren't identical to the
+  S3-compatible presigned PUT this backend originally used (R2), so a
+  config that "looks right" can still fail on the actual upload step.
+  Test by uploading a real photo through **Admin → Photos** and
+  confirming it appears with a working image, not just that the API
+  calls return 200.
 
 ## 2. Deploy the backend to Render
 
@@ -111,12 +106,20 @@ verify → verify → session → me → logout; forgot → reset → old passwo
 rejected, new one works; admin bootstrap → staff invite → accept → login →
 permission boundary (staff can't manage roles) → revoke; confirms the
 customer and admin login endpoints never cross-validate each other's
-credentials; and (see `tests/test_photos.py`) upload → draft →
-publish → view-count increments → like/unlike → edit → delete-with-R2-
-cleanup, plus that drafts/flagged photos 404 for the public and that a
-customer session can't call any `photos:manage` endpoint. R2 itself is
-monkeypatched in these tests (no real bucket needed to run them) — see
-`tests/test_photos.py::fake_storage`.
+credentials; (`tests/test_photos.py`) upload → draft → publish →
+view-count increments → like/unlike → edit → delete-with-storage-cleanup,
+plus that drafts/flagged photos 404 for the public and a customer session
+can't call any `photos:manage` endpoint; (`tests/test_comments.py`) guest
+and customer comments, nested replies, moderation (flag/delete, cascades
+to replies), and that a customer can't moderate; (`tests/test_conversations.py`)
+a customer's thread, admin/staff reply (auto-flips status), permission
+boundaries (customer can't list everyone's conversations or reply to
+someone else's); and (`tests/test_notifications.py`) that a comment reply
+and an admin conversation reply each produce the right notification (and
+that self-replies and guest-authored parents produce none), plus
+list/unread-count/mark-read/mark-all-read and that one customer can't see
+or touch another's notifications. Storage (Supabase) is monkeypatched in
+`test_photos.py` — no real bucket needed to run any of this.
 
 Then run it for real, against your actual Neon/Upstash (or a local Postgres
 + Redis if you have them):
@@ -193,6 +196,52 @@ curl -i -b cookies.txt "$BASE/api/customer/me"
 
 # Public photo listing (published only) -- works even with an empty catalog
 curl -i "$BASE/api/photos?random=9"
+```
+
+### curl smoke test — comments, conversations, notifications (backend only)
+
+Runs entirely against the API, no frontend needed. Assumes `cookies.txt`
+from above still has a valid customer session, and that `$PHOTO_ID` is a
+published photo's id (grab one from the `/api/photos` call above).
+
+```bash
+# Comment on a photo as the logged-in customer
+curl -i -X POST "$BASE/api/photos/$PHOTO_ID/comments" \
+  -H "Content-Type: application/json" -b cookies.txt \
+  -d '{"text":"Great piece!"}'
+# -> 201; copy the returned "id" as $COMMENT_ID
+
+# Reply as a guest (no cookie) -- comments allow this by design
+curl -i -X POST "$BASE/api/photos/$PHOTO_ID/comments" \
+  -H "Content-Type: application/json" \
+  -d "{\"text\":\"Agreed!\",\"parent_id\":\"$COMMENT_ID\"}"
+# -> 201; the original commenter should now have a notification (see below)
+
+curl -i "$BASE/api/photos/$PHOTO_ID/comments"
+# -> 200; nested tree with the reply under the root comment
+
+# Confirm the notification landed
+curl -i -b cookies.txt "$BASE/api/notifications"
+# -> 200; one comment_reply notification, read: false
+
+# Start a conversation as the customer
+curl -i -X POST "$BASE/api/conversations" \
+  -H "Content-Type: application/json" -b cookies.txt \
+  -d '{"subject":"Licensing question","text":"What are your rates?"}'
+# -> 201; copy the returned "id" as $CONVERSATION_ID
+
+# Log in as admin (separate cookie jar) and reply
+curl -i -X POST "$BASE/api/auth/login" \
+  -H "Content-Type: application/json" -c admin_cookies.txt \
+  -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}"
+curl -i -X POST "$BASE/api/conversations/$CONVERSATION_ID/messages" \
+  -H "Content-Type: application/json" -b admin_cookies.txt \
+  -d '{"text":"Our rates start at $80/image."}'
+# -> 200; conversation status should now read "in_progress"
+
+# Back as the customer -- a second notification should be waiting
+curl -i -b cookies.txt "$BASE/api/notifications/unread-count"
+# -> 200; {"count": 2}
 ```
 
 ## Rotating the admin password

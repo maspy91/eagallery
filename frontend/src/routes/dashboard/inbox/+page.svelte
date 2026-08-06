@@ -1,77 +1,94 @@
 <script lang="ts">
+	// frontend/src/routes/dashboard/inbox/+page.svelte
+	// EDITED FILE — replaces: src/routes/dashboard/inbox/+page.svelte (whole-file replacement)
+	// Replaced mockConversations (filtered client-side by customerId) with
+	// GET /api/conversations/mine. sendNew/sendReply now call the real
+	// create/reply endpoints instead of mutating the mock array in place.
+
 	import { page } from '$app/stores';
-	import { Send, Plus, MessagesSquare } from '@lucide/svelte';
+	import { onMount } from 'svelte';
+	import { Send, Plus, MessagesSquare, LoaderCircle } from '@lucide/svelte';
 	import { currentUser } from '$lib/stores/auth';
-	import { mockConversations } from '$lib/data/mock';
-	import type { BusinessConversation } from '$lib/types';
+	import { conversationsApi, ApiError, type ApiConversation } from '$lib/api';
 
-	$: myId = $currentUser?.id;
-	let conversations: BusinessConversation[] = [];
-	$: conversations = mockConversations.filter((c) => c.customerId === myId);
+	let conversations: ApiConversation[] = [];
+	let loading = true;
+	let loadError = '';
 
-	let selected: BusinessConversation | null = null;
-	$: if (!selected && conversations.length > 0) selected = conversations[0];
+	async function load() {
+		loading = true;
+		loadError = '';
+		try {
+			conversations = await conversationsApi.listMine();
+			if (!selected && !composing && conversations.length > 0) selected = conversations[0];
+		} catch (err) {
+			loadError = err instanceof ApiError ? err.message : 'Could not load your inbox.';
+		} finally {
+			loading = false;
+		}
+	}
+
+	onMount(load);
+
+	let selected: ApiConversation | null = null;
 
 	let composing = $page.url.searchParams.get('new') === '1';
 	let newSubject = '';
 	let newMessage = '';
 	let reply = '';
+	let sending = false;
+	let formError = '';
 
-	const statusStyle: Record<BusinessConversation['status'], string> = {
+	const statusStyle: Record<ApiConversation['status'], string> = {
 		new: 'bg-primary/10 text-primary',
 		in_progress: 'bg-secondary/10 text-secondary',
 		resolved: 'bg-success/10 text-success'
 	};
 
-	function select(c: BusinessConversation) {
+	function select(c: ApiConversation) {
 		selected = c;
 		composing = false;
 		reply = '';
+		formError = '';
 	}
 
 	function startNew() {
 		composing = true;
 		selected = null;
+		formError = '';
 	}
 
-	function sendNew() {
-		if (!newSubject.trim() || !newMessage.trim() || !$currentUser) return;
-		const conversation: BusinessConversation = {
-			id: Math.max(0, ...mockConversations.map((c) => c.id)) + 1,
-			customerId: $currentUser.id,
-			customerName: $currentUser.name,
-			customerEmail: $currentUser.email,
-			subject: newSubject.trim(),
-			status: 'new',
-			updatedAt: new Date().toISOString(),
-			messages: [
-				{
-					id: 1,
-					senderRole: 'customer',
-					senderName: $currentUser.name,
-					text: newMessage.trim(),
-					timestamp: new Date().toISOString()
-				}
-			]
-		};
-		mockConversations.unshift(conversation);
-		conversations = mockConversations.filter((c) => c.customerId === myId);
-		newSubject = '';
-		newMessage = '';
-		select(conversation);
+	async function sendNew() {
+		if (!newSubject.trim() || !newMessage.trim()) return;
+		sending = true;
+		formError = '';
+		try {
+			const created = await conversationsApi.create(newSubject.trim(), newMessage.trim());
+			conversations = [created, ...conversations];
+			newSubject = '';
+			newMessage = '';
+			select(created);
+		} catch (err) {
+			formError = err instanceof ApiError ? err.message : 'Could not send your message.';
+		} finally {
+			sending = false;
+		}
 	}
 
-	function sendReply() {
-		if (!selected || !reply.trim() || !$currentUser) return;
-		selected.messages.push({
-			id: selected.messages.length + 1,
-			senderRole: 'customer',
-			senderName: $currentUser.name,
-			text: reply.trim(),
-			timestamp: new Date().toISOString()
-		});
-		selected = { ...selected };
-		reply = '';
+	async function sendReply() {
+		if (!selected || !reply.trim()) return;
+		sending = true;
+		formError = '';
+		try {
+			const updated = await conversationsApi.reply(selected.id, reply.trim());
+			conversations = conversations.map((c) => (c.id === updated.id ? updated : c));
+			selected = updated;
+			reply = '';
+		} catch (err) {
+			formError = err instanceof ApiError ? err.message : 'Could not send your reply.';
+		} finally {
+			sending = false;
+		}
 	}
 </script>
 
@@ -94,24 +111,32 @@
 
 	<div class="grid lg:grid-cols-[320px_1fr] gap-6">
 		<div class="glass elevated rounded-xl divide-y divide-border/60 overflow-hidden">
-			{#each conversations as c (c.id)}
-				<button
-					on:click={() => select(c)}
-					class="w-full text-left p-4 transition-colors {selected?.id === c.id && !composing ? 'bg-primary/5' : 'hover:bg-muted/40'}"
-				>
-					<div class="flex items-center justify-between gap-2">
-						<span class="font-medium text-foreground text-sm truncate">{c.subject}</span>
-						<span class="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium capitalize {statusStyle[c.status]}">
-							{c.status.replace('_', ' ')}
-						</span>
-					</div>
-					<p class="text-sm text-muted-foreground truncate mt-0.5">
-						{c.messages[c.messages.length - 1]?.text}
-					</p>
-				</button>
-			{/each}
-			{#if conversations.length === 0}
-				<p class="text-center text-muted-foreground py-12 px-4">No conversations yet.</p>
+			{#if loading}
+				<p class="text-center text-muted-foreground py-12 px-4">
+					<LoaderCircle class="w-4 h-4 animate-spin inline-block mr-2" />
+					Loading…
+				</p>
+			{:else if loadError}
+				<p class="text-center text-destructive py-12 px-4">{loadError}</p>
+			{:else}
+				{#each conversations as c (c.id)}
+					<button
+						on:click={() => select(c)}
+						class="w-full text-left p-4 transition-colors {selected?.id === c.id && !composing ? 'bg-primary/5' : 'hover:bg-muted/40'}"
+					>
+						<div class="flex items-center justify-between gap-2">
+							<span class="font-medium text-foreground text-sm truncate">{c.subject}</span>
+							<span class="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium capitalize {statusStyle[c.status]}">
+								{c.status.replace('_', ' ')}
+							</span>
+						</div>
+						<p class="text-sm text-muted-foreground truncate mt-0.5">
+							{c.messages[c.messages.length - 1]?.text}
+						</p>
+					</button>
+				{:else}
+					<p class="text-center text-muted-foreground py-12 px-4">No conversations yet.</p>
+				{/each}
 			{/if}
 		</div>
 
@@ -137,12 +162,15 @@
 							class="w-full min-h-[140px] resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 						/>
 					</div>
+					{#if formError}
+						<p class="text-sm text-destructive">{formError}</p>
+					{/if}
 					<button
 						on:click={sendNew}
-						disabled={!newSubject.trim() || !newMessage.trim()}
+						disabled={!newSubject.trim() || !newMessage.trim() || sending}
 						class="flex items-center gap-2 px-4 py-2.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity text-sm font-medium"
 					>
-						<Send class="w-4 h-4" />
+						{#if sending}<LoaderCircle class="w-4 h-4 animate-spin" />{:else}<Send class="w-4 h-4" />{/if}
 						Send message
 					</button>
 				</div>
@@ -178,12 +206,15 @@
 						placeholder="Write a message..."
 						class="w-full min-h-[90px] resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					/>
+					{#if formError}
+						<p class="text-sm text-destructive">{formError}</p>
+					{/if}
 					<button
 						on:click={sendReply}
-						disabled={!reply.trim()}
+						disabled={!reply.trim() || sending}
 						class="flex items-center gap-2 px-4 py-2.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity text-sm font-medium"
 					>
-						<Send class="w-4 h-4" />
+						{#if sending}<LoaderCircle class="w-4 h-4 animate-spin" />{:else}<Send class="w-4 h-4" />{/if}
 						Send
 					</button>
 				</div>

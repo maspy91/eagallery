@@ -1,14 +1,35 @@
 <script lang="ts">
+	// frontend/src/routes/dashboard/+page.svelte
+	// EDITED FILE — replaces: src/routes/dashboard/+page.svelte (whole-file replacement)
+	// Changes: "Unread notifications" now reads the real notifications
+	// store. "Open conversations" now fetches real data via
+	// conversationsApi.listMine() (this was flagged as a stale-data gap
+	// after the conversations round, fixed here since this file needed
+	// touching anyway). "Post threads you're in" is UNCHANGED and still
+	// reads mockComments -- that's the separate dashboard/conversations
+	// comment-thread feature, still out of scope.
+
+	import { onMount } from 'svelte';
 	import { Bell, Inbox, MessagesSquare, Plus } from '@lucide/svelte';
 	import { currentUser } from '$lib/stores/auth';
-	import { mockNotifications, mockConversations, galleryItems, mockComments } from '$lib/data/mock';
+	import { notifications } from '$lib/stores/notifications';
+	import { mockComments, galleryItems } from '$lib/data/mock';
+	import { conversationsApi, type ApiConversation } from '$lib/api';
 	import type { CommentNode } from '$lib/types';
 
 	$: myId = $currentUser?.id;
 
-	$: unreadNotifications = mockNotifications.filter((n) => n.userId === myId && !n.read);
-	$: myConversations = mockConversations.filter((c) => c.customerId === myId);
-	$: openConversations = myConversations.filter((c) => c.status !== 'resolved').length;
+	$: unreadNotifications = $notifications.filter((n) => !n.read);
+
+	let openConversations = 0;
+	onMount(async () => {
+		try {
+			const mine: ApiConversation[] = await conversationsApi.listMine();
+			openConversations = mine.filter((c) => c.status !== 'resolved').length;
+		} catch {
+			// leave at 0 -- not worth surfacing an error for a dashboard stat card
+		}
+	});
 
 	function countMyThreads(): number {
 		let count = 0;

@@ -1,3 +1,8 @@
+# backend/app/main.py
+# EDITED FILE — replaces: app/main.py (whole-file replacement)
+# Assumes comments + conversations are already wired in from previous
+# rounds -- this just adds the notifications router on top.
+
 import logging
 from contextlib import asynccontextmanager
 
@@ -9,7 +14,7 @@ from app.core.config import get_settings
 from app.core.database import Base, engine
 from app.core.model_registry import discover_models
 from app.core.redis import redis_client
-from app.routers import admin_auth, customer_auth, photos
+from app.routers import admin_auth, comments, conversations, customer_auth, notifications, photos
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,10 +70,12 @@ app.add_middleware(
 app.include_router(customer_auth.router)
 app.include_router(admin_auth.router)
 app.include_router(photos.router)
+app.include_router(comments.photo_comments_router)
+app.include_router(comments.moderation_router)
+app.include_router(conversations.router)
+app.include_router(notifications.router)
 
-# Future domain routers (comments, requests, analytics) get included here
-# the same way, e.g.:
-# app.include_router(comments_router)
+# Future domain routers (analytics, etc.) get included here the same way.
 
 
 @app.get("/")

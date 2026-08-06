@@ -1,20 +1,49 @@
 <script lang="ts">
-	import { MessageCircle, Send } from '@lucide/svelte';
+	// frontend/src/lib/components/CommentSection.svelte
+	// EDITED FILE — replaces: src/lib/components/CommentSection.svelte (whole-file replacement)
+	// Changed from `export let comments: CommentNode[]` (parent passed mock
+	// data in) to `export let photoId: string` (this component now fetches
+	// and posts real comments itself via commentsApi). Guest commenting is
+	// preserved -- no login required to post, matching the original mock
+	// behavior and the backend's comments router (guests just can't like
+	// photos or moderate comments, same as before).
+
+	import { MessageCircle, Send, LoaderCircle } from '@lucide/svelte';
 	import type { CommentNode } from '$lib/types';
 	import CommentItem from './CommentItem.svelte';
 	import { currentUser } from '$lib/stores/auth';
+	import { commentsApi, ApiError } from '$lib/api';
 
-	export let comments: CommentNode[] = [];
+	export let photoId: string;
+
+	let comments: CommentNode[] = [];
+	let loading = true;
+	let loadError = '';
 
 	let newComment = '';
 	let submitting = false;
 	let error = '';
-	let nextId = 1000;
 
-	$: authorName = $currentUser?.role === 'customer' ? $currentUser.name : 'Anonymous User';
-	$: authorId = $currentUser?.role === 'customer' ? $currentUser.id : undefined;
+	async function load(id: string) {
+		loading = true;
+		loadError = '';
+		try {
+			comments = await commentsApi.list(id);
+		} catch (err) {
+			loadError = err instanceof ApiError ? err.message : 'Could not load comments.';
+		} finally {
+			loading = false;
+		}
+	}
 
-	function submitComment() {
+	$: load(photoId);
+
+	function countAll(nodes: CommentNode[]): number {
+		return nodes.reduce((sum, c) => sum + 1 + countAll(c.replies), 0);
+	}
+	$: totalCount = countAll(comments);
+
+	async function submitComment() {
 		const trimmed = newComment.trim();
 		if (trimmed.length === 0) {
 			error = 'Comment cannot be empty';
@@ -26,36 +55,35 @@
 		}
 		error = '';
 		submitting = true;
-		setTimeout(() => {
-			comments = [
-				{ id: nextId++, author: authorName, authorId, text: trimmed, timestamp: 'Just now', replies: [] },
-				...comments
-			];
+		try {
+			const created = await commentsApi.create(photoId, trimmed);
+			comments = [created, ...comments];
 			newComment = '';
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Could not post your comment. Please try again.';
+		} finally {
 			submitting = false;
-		}, 300);
-	}
-
-	function addReply(commentId: number, text: string) {
-		function walk(nodes: CommentNode[]): CommentNode[] {
-			return nodes.map((c) => {
-				if (c.id === commentId) {
-					return {
-						...c,
-						replies: [
-							...c.replies,
-							{ id: nextId++, author: authorName, authorId, text, timestamp: 'Just now', replies: [] }
-						]
-					};
-				}
-				if (c.replies.length > 0) return { ...c, replies: walk(c.replies) };
-				return c;
-			});
 		}
-		comments = walk(comments);
 	}
 
-	function handleReply(e: CustomEvent<{ commentId: number; text: string }>) {
+	async function addReply(commentId: string, text: string) {
+		try {
+			const reply = await commentsApi.create(photoId, text, commentId);
+			function walk(nodes: CommentNode[]): CommentNode[] {
+				return nodes.map((c) => {
+					if (c.id === commentId) return { ...c, replies: [...c.replies, reply] };
+					if (c.replies.length > 0) return { ...c, replies: walk(c.replies) };
+					return c;
+				});
+			}
+			comments = walk(comments);
+		} catch {
+			// swallow -- the reply form in CommentItem simply stays open so
+			// the person can see their text is still there and retry
+		}
+	}
+
+	function handleReply(e: CustomEvent<{ commentId: string; text: string }>) {
 		addReply(e.detail.commentId, e.detail.text);
 	}
 </script>
@@ -63,7 +91,7 @@
 <div class="glass elevated rounded-xl p-6 space-y-6">
 	<div class="flex items-center gap-2">
 		<MessageCircle class="w-5 h-5 text-primary" />
-		<h2 class="text-2xl font-bold text-foreground">Comments ({comments.length})</h2>
+		<h2 class="text-2xl font-bold text-foreground">Comments ({totalCount})</h2>
 	</div>
 
 	<div class="space-y-3">
@@ -88,14 +116,24 @@
 				disabled={!newComment.trim() || submitting}
 				class="flex items-center gap-2 px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
 			>
-				<Send class="w-4 h-4" />
+				{#if submitting}
+					<LoaderCircle class="w-4 h-4 animate-spin" />
+				{:else}
+					<Send class="w-4 h-4" />
+				{/if}
 				Post Comment
 			</button>
 		</div>
 	</div>
 
 	<div class="space-y-4">
-		{#if comments.length === 0}
+		{#if loading}
+			<div class="text-center py-8 text-muted-foreground">
+				<LoaderCircle class="w-6 h-6 mx-auto animate-spin" />
+			</div>
+		{:else if loadError}
+			<p class="text-center text-sm text-destructive py-4">{loadError}</p>
+		{:else if comments.length === 0}
 			<div class="text-center py-8 text-muted-foreground">
 				<MessageCircle class="w-12 h-12 mx-auto mb-3 opacity-50" />
 				<p>No comments yet. Be the first to share your thoughts!</p>

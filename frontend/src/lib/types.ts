@@ -1,3 +1,9 @@
+// frontend/src/lib/types.ts
+// EDITED FILE — replaces: src/lib/types.ts (whole-file replacement)
+// This round's change: AppNotification.id is now `string` (same UUID
+// reasoning as every other id migration before it). Everything else
+// unchanged from last round.
+
 export type Permission =
 	| 'photos:manage' // upload, edit, delete, organize
 	| 'roles:manage' // create/assign/revoke admin-assigned roles
@@ -42,7 +48,7 @@ export interface GalleryItem {
 }
 
 export interface CommentNode {
-	id: number;
+	id: string;
 	author: string;
 	authorId?: string; // set when the comment was posted by a logged-in customer
 	text: string;
@@ -52,7 +58,7 @@ export interface CommentNode {
 }
 
 export interface ConversationMessage {
-	id: number;
+	id: string;
 	senderRole: 'customer' | 'admin' | 'staff';
 	senderName: string;
 	text: string;
@@ -67,7 +73,7 @@ export interface ConversationMessage {
  * the same `messages` array.
  */
 export interface BusinessConversation {
-	id: number;
+	id: string;
 	customerId: string;
 	customerName: string;
 	customerEmail: string;
@@ -87,7 +93,7 @@ export interface Testimonial {
 }
 
 export interface AppNotification {
-	id: number;
+	id: string;
 	userId: string;
 	type: 'comment_reply' | 'conversation_reply' | 'system';
 	message: string;

@@ -1,7 +1,16 @@
+// frontend/src/lib/stores/auth.ts
+// EDITED FILE — replaces: src/lib/stores/auth.ts (whole-file replacement)
+// Changes: hooks notification loading into the customer session lifecycle
+// -- loaded on restoreSession()/loginCustomer()/verifyEmail() (all three
+// result in an active customer session), cleared on logout(). Admin/staff
+// sessions don't touch notifications -- that side has no bell (see
+// Navbar.svelte).
+
 import { writable, derived, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import type { AppUser } from '$lib/types';
 import { customerApi, adminApi, ApiError } from '$lib/api';
+import { loadNotifications, clearNotifications } from '$lib/stores/notifications';
 
 /**
  * PHASE 2: session state is the httpOnly cookie the backend sets on
@@ -55,6 +64,7 @@ export async function restoreSession() {
 		try {
 			const user = await customerApi.me();
 			currentUser.set(toAppUser(user));
+			void loadNotifications();
 			return;
 		} catch {
 			// no customer session -- fall through and try admin/staff
@@ -80,12 +90,14 @@ export async function registerCustomer(name: string, email: string, password: st
 export async function verifyEmail(token: string) {
 	const user = await customerApi.verifyEmail(token);
 	currentUser.set(toAppUser(user));
+	void loadNotifications();
 	return toAppUser(user);
 }
 
 export async function loginCustomer(email: string, password: string) {
 	const user = await customerApi.login(email, password);
 	currentUser.set(toAppUser(user));
+	void loadNotifications();
 	return toAppUser(user);
 }
 
@@ -104,6 +116,7 @@ export async function acceptStaffInvite(token: string, password: string) {
 export async function logout() {
 	const wasAdminSide = ['admin', 'staff'].includes(get(currentUser)?.role ?? '');
 	currentUser.set(null);
+	clearNotifications();
 	try {
 		if (wasAdminSide) {
 			await adminApi.logout();

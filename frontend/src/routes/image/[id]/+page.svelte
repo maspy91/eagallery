@@ -1,14 +1,17 @@
 <script lang="ts">
+	// frontend/src/routes/image/[id]/+page.svelte
+	// EDITED FILE — replaces: src/routes/image/[id]/+page.svelte (whole-file replacement)
+	// Changes: dropped the `mockComments` lookup and the now-unused
+	// `CommentNode` import; CommentSection now takes `photoId` directly and
+	// fetches/posts real comments itself.
+
 	import { page } from '$app/stores';
 	import { ArrowLeft, Eye, Heart, Share2, ExternalLink, LoaderCircle } from '@lucide/svelte';
-	import { mockComments } from '$lib/data/mock';
 	import CommentSection from '$lib/components/CommentSection.svelte';
-	import type { CommentNode } from '$lib/types';
 	import { currentUser } from '$lib/stores/auth';
 	import { photosApi, type ApiPhoto } from '$lib/api';
 
 	$: id = $page.params.id;
-	$: comments = (mockComments[id] ?? []) as CommentNode[];
 
 	let loading = true;
 	let notFound = false;
@@ -192,7 +195,7 @@
 					<ExternalLink class="w-5 h-5" />
 				</button>
 
-				<CommentSection {comments} />
+				<CommentSection photoId={item.id} />
 			</div>
 		</div>
 	</main>

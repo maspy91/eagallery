@@ -1,14 +1,20 @@
+// frontend/src/lib/api.ts
+// EDITED FILE — replaces: src/lib/api.ts (whole-file replacement)
+// Assumes commentsApi and conversationsApi are already in this file from
+// previous rounds. This round only adds notificationsApi at the bottom --
+// everything above it is unchanged from before.
+
 import { PUBLIC_API_URL } from '$env/static/public';
 
 /**
  * Every call includes `credentials: 'include'` so the httpOnly session
- * cookie (set by the backend on login/verify/accept-invite) is sent with
- * same-site requests. PUBLIC_API_URL is normally left empty: the
- * recommended deployment proxies /api/* through a Vercel rewrite straight
- * to the Render backend (see vercel.json + DEPLOY.md), so relative paths
- * already reach it and everything is same-origin from the browser's point
- * of view. Set PUBLIC_API_URL only if calling the Render URL directly,
- * cross-site, instead.
+ * cookie (set by the backend on login/verify/accept-invite) is sent along.
+ * PUBLIC_API_URL points at the backend's own URL (e.g. the Render deploy)
+ * — this is a direct, cross-site call, not a same-origin proxy, which is
+ * why the backend's session cookies default to SameSite=None (see
+ * backend/app/core/config.py and DEPLOY.md for the full reasoning and the
+ * same-origin-proxy alternative if you'd rather avoid third-party cookies
+ * later).
  */
 const BASE = PUBLIC_API_URL?.replace(/\/$/, '') ?? '';
 
@@ -168,4 +174,95 @@ export const photosApi = {
 		const res = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
 		if (!res.ok) throw new ApiError(res.status, 'Upload to storage failed');
 	}
+};
+
+// ---- Comments ----
+// Two backend routes: /api/photos/{id}/comments (public read + create,
+// nested tree, scoped to one photo) and /api/comments (moderation, flat,
+// cross-photo -- what the admin "Comments" page lists).
+
+export interface ApiComment {
+	id: string;
+	author: string;
+	authorId: string | null;
+	text: string;
+	timestamp: string;
+	flagged: boolean;
+	replies: ApiComment[];
+}
+
+export interface ApiAdminComment extends ApiComment {
+	photoId: string;
+	photoTitle: string;
+}
+
+export const commentsApi = {
+	list: (photoId: string) => get<ApiComment[]>(`/api/photos/${photoId}/comments`),
+	create: (photoId: string, text: string, parentId?: string) =>
+		post<ApiComment>(`/api/photos/${photoId}/comments`, { text, parent_id: parentId ?? null }),
+	// Moderation (comments:moderate only):
+	listAll: () => get<ApiAdminComment[]>('/api/comments'),
+	setFlagged: (id: string, flagged: boolean) =>
+		request<MessageResponse>(`/api/comments/${id}`, { method: 'PATCH', body: JSON.stringify({ flagged }) }),
+	remove: (id: string) => del<MessageResponse>(`/api/comments/${id}`)
+};
+
+// ---- Business conversations ----
+// One thread shared between a customer and admin/staff. Customers see
+// their own via GET /mine; admin/staff see everyone's via GET (no
+// suffix), gated by requests:respond. Replying is the same endpoint for
+// both sides -- the backend figures out which one you are.
+
+export interface ApiConversationMessage {
+	id: string;
+	senderRole: 'customer' | 'admin' | 'staff';
+	senderName: string;
+	text: string;
+	timestamp: string;
+}
+
+export interface ApiConversation {
+	id: string;
+	customerId: string;
+	customerName: string;
+	customerEmail: string;
+	subject: string;
+	status: 'new' | 'in_progress' | 'resolved';
+	messages: ApiConversationMessage[];
+	updatedAt: string;
+}
+
+export const conversationsApi = {
+	// Customer side:
+	listMine: () => get<ApiConversation[]>('/api/conversations/mine'),
+	create: (subject: string, text: string) => post<ApiConversation>('/api/conversations', { subject, text }),
+	// Admin/staff side (requests:respond only):
+	listAll: () => get<ApiConversation[]>('/api/conversations'),
+	setStatus: (id: string, status: ApiConversation['status']) =>
+		request<ApiConversation>(`/api/conversations/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+	// Shared -- works for either side, backend resolves who's calling:
+	reply: (id: string, text: string) => post<ApiConversation>(`/api/conversations/${id}/messages`, { text })
+};
+
+// ---- Notifications ----
+// Customer-only (matches Navbar.svelte's bell, which only ever renders
+// for the customer nav). Created server-side by comment replies and
+// admin/staff conversation replies -- nothing here ever creates one
+// directly.
+
+export interface ApiNotification {
+	id: string;
+	userId: string;
+	type: 'comment_reply' | 'conversation_reply' | 'system';
+	message: string;
+	href: string;
+	read: boolean;
+	timestamp: string;
+}
+
+export const notificationsApi = {
+	list: () => get<ApiNotification[]>('/api/notifications'),
+	unreadCount: () => get<{ count: number }>('/api/notifications/unread-count'),
+	markRead: (id: string) => post<ApiNotification>(`/api/notifications/${id}/read`, {}),
+	markAllRead: () => post<MessageResponse>('/api/notifications/read-all', {})
 };
