@@ -114,15 +114,13 @@
 		>
 			<p>&copy; {year} EddyArt Gallery. All rights reserved.</p>
 			<p>
-				Developed by
+				Ready to build something amazing? 
 				<a
-					href="https://github.com"
-					target="_blank"
-					rel="noopener noreferrer"
+					href="mailto:mapida.ishaya@gmail.com"
 					class="text-primary hover:underline"
 				>
-					Eddy
-				</a>
+					Mail the developer.
+					</a>
 			</p>
 		</div>
 	</div>
