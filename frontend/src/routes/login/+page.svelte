@@ -1,16 +1,28 @@
 <script lang="ts">
+	// frontend/src/routes/login/+page.svelte
+	// EDITED FILE — replaces: src/routes/login/+page.svelte (whole-file replacement)
+	// Adds the Turnstile widget where the Phase 2 placeholder comment was.
+	// Same graceful no-op behavior as register/+page.svelte when
+	// PUBLIC_TURNSTILE_SITE_KEY isn't set.
+
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { User, Lock, Mail, Eye, EyeOff } from '@lucide/svelte';
 	import { currentUser, loginCustomer } from '$lib/stores/auth';
 	import { loginSchema } from '$lib/validation';
 	import { ApiError } from '$lib/api';
+	import { PUBLIC_TURNSTILE_SITE_KEY } from '$env/static/public';
+	import TurnstileWidget from '$lib/components/TurnstileWidget.svelte';
 
 	let email = '';
 	let password = '';
 	let showPassword = false;
 	let loading = false;
 	let formError = '';
+
+	const turnstileRequired = Boolean(PUBLIC_TURNSTILE_SITE_KEY);
+	let turnstileToken: string | undefined;
+	let turnstileWidget: TurnstileWidget;
 
 	onMount(() => {
 		if ($currentUser?.role === 'customer') goto('/dashboard');
@@ -23,13 +35,19 @@
 			formError = parsed.error.errors[0].message;
 			return;
 		}
+		if (turnstileRequired && !turnstileToken) {
+			formError = 'Please complete the verification challenge.';
+			return;
+		}
 
 		loading = true;
 		try {
-			await loginCustomer(email.trim(), password);
+			await loginCustomer(email.trim(), password, turnstileToken);
 			goto('/dashboard');
 		} catch (err) {
 			formError = err instanceof ApiError ? err.message : 'Something went wrong. Please try again.';
+			turnstileWidget?.reset();
+			turnstileToken = undefined;
 		} finally {
 			loading = false;
 		}
@@ -99,7 +117,13 @@
 					</div>
 				</div>
 
-				<!-- Phase 2: Turnstile widget renders here -->
+				<!-- Renders nothing when Turnstile isn't configured -->
+				<TurnstileWidget
+					bind:this={turnstileWidget}
+					on:verified={(e) => (turnstileToken = e.detail)}
+					on:expired={() => (turnstileToken = undefined)}
+					on:error={() => (turnstileToken = undefined)}
+				/>
 
 				{#if formError}
 					<p class="text-sm text-destructive text-center">{formError}</p>

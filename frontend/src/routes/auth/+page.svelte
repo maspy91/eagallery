@@ -1,10 +1,17 @@
 <script lang="ts">
+	// frontend/src/routes/auth/+page.svelte
+	// EDITED FILE — replaces: src/routes/auth/+page.svelte (whole-file replacement)
+	// This page already had a placeholder div (further along than the
+	// other two forms) -- replaced it with the actual widget component.
+
 	import { goto } from '$app/navigation';
 	import { z } from 'zod';
 	import { Eye, EyeOff, Shield, Lock, Mail, Sparkles, CircleCheckBig } from '@lucide/svelte';
 	import { currentUser, loginAdmin } from '$lib/stores/auth';
 	import { onMount } from 'svelte';
 	import { ApiError } from '$lib/api';
+	import { PUBLIC_TURNSTILE_SITE_KEY } from '$env/static/public';
+	import TurnstileWidget from '$lib/components/TurnstileWidget.svelte';
 
 	const authSchema = z.object({
 		email: z.string().email('Invalid email address').max(255),
@@ -17,6 +24,10 @@
 	let loading = false;
 	let formError = '';
 
+	const turnstileRequired = Boolean(PUBLIC_TURNSTILE_SITE_KEY);
+	let turnstileToken: string | undefined;
+	let turnstileWidget: TurnstileWidget;
+
 	onMount(() => {
 		if ($currentUser) goto('/admin');
 	});
@@ -28,13 +39,19 @@
 			formError = parsed.error.errors[0].message;
 			return;
 		}
+		if (turnstileRequired && !turnstileToken) {
+			formError = 'Please complete the verification challenge.';
+			return;
+		}
 
 		loading = true;
 		try {
-			await loginAdmin(email.trim(), password);
+			await loginAdmin(email.trim(), password, turnstileToken);
 			goto('/admin');
 		} catch (err) {
 			formError = err instanceof ApiError ? err.message : 'Something went wrong. Please try again.';
+			turnstileWidget?.reset();
+			turnstileToken = undefined;
 		} finally {
 			loading = false;
 		}
@@ -129,11 +146,13 @@
 					</div>
 				</div>
 
-				<!--
-					Phase 2: Cloudflare Turnstile widget renders here, and its token
-					is verified server-side before the login request is processed.
-					<div id="turnstile-widget" />
-				-->
+				<!-- Renders nothing when Turnstile isn't configured -->
+				<TurnstileWidget
+					bind:this={turnstileWidget}
+					on:verified={(e) => (turnstileToken = e.detail)}
+					on:expired={() => (turnstileToken = undefined)}
+					on:error={() => (turnstileToken = undefined)}
+				/>
 
 				{#if formError}
 					<p class="text-sm text-destructive text-center">{formError}</p>

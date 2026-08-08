@@ -1,10 +1,10 @@
 // frontend/src/lib/stores/auth.ts
 // EDITED FILE — replaces: src/lib/stores/auth.ts (whole-file replacement)
-// Changes: hooks notification loading into the customer session lifecycle
-// -- loaded on restoreSession()/loginCustomer()/verifyEmail() (all three
-// result in an active customer session), cleared on logout(). Admin/staff
-// sessions don't touch notifications -- that side has no bell (see
-// Navbar.svelte).
+// This round's change: registerCustomer/loginCustomer/loginAdmin now
+// accept an optional turnstileToken and pass it through to the
+// corresponding api.ts call (which already supported it -- it just had
+// nothing feeding it before now). Everything else -- notification hooks
+// from the previous round -- is unchanged.
 
 import { writable, derived, get } from 'svelte/store';
 import { browser } from '$app/environment';
@@ -81,8 +81,8 @@ export async function restoreSession() {
 	}
 }
 
-export async function registerCustomer(name: string, email: string, password: string) {
-	await customerApi.register(name, email, password);
+export async function registerCustomer(name: string, email: string, password: string, turnstileToken?: string) {
+	await customerApi.register(name, email, password, turnstileToken);
 	// No session yet -- registration only sends the verification email.
 	// The session begins when the link is confirmed (see verifyEmail).
 }
@@ -94,15 +94,15 @@ export async function verifyEmail(token: string) {
 	return toAppUser(user);
 }
 
-export async function loginCustomer(email: string, password: string) {
-	const user = await customerApi.login(email, password);
+export async function loginCustomer(email: string, password: string, turnstileToken?: string) {
+	const user = await customerApi.login(email, password, turnstileToken);
 	currentUser.set(toAppUser(user));
 	void loadNotifications();
 	return toAppUser(user);
 }
 
-export async function loginAdmin(email: string, password: string) {
-	const user = await adminApi.login(email, password);
+export async function loginAdmin(email: string, password: string, turnstileToken?: string) {
+	const user = await adminApi.login(email, password, turnstileToken);
 	currentUser.set(toAppUser(user));
 	return toAppUser(user);
 }

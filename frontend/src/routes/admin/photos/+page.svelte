@@ -1,4 +1,15 @@
 <script lang="ts">
+	// frontend/src/routes/admin/photos/+page.svelte
+	// EDITED FILE — replaces: src/routes/admin/photos/+page.svelte (whole-file replacement)
+	// Fix: the edit dialog that auto-opens right after upload had no status
+	// control at all -- publishing only existed as a small, easy-to-miss
+	// clickable badge back in the table, with no indication in the dialog
+	// itself that it existed. Added a Status selector directly into the
+	// dialog (editStatus, initialized in startEdit(), included in the
+	// saveEdit() payload). The table badge still works too, for quickly
+	// changing status without opening the dialog -- this is additive, not
+	// a replacement.
+
 	import { onMount } from 'svelte';
 	import { Upload, Pencil, Trash2, Eye, Heart, LoaderCircle, X } from '@lucide/svelte';
 	import { photosApi, type ApiPhoto, ApiError } from '$lib/api';
@@ -16,6 +27,7 @@
 	let editCategory = '';
 	let editDescription = '';
 	let editSpecs = '';
+	let editStatus: ApiPhoto['status'] = 'draft';
 	let savingEdit = false;
 	let editError = '';
 
@@ -93,6 +105,7 @@
 		editCategory = item.category;
 		editDescription = item.description;
 		editSpecs = item.specs.join(', ');
+		editStatus = item.status;
 		editError = '';
 	}
 
@@ -112,7 +125,8 @@
 				specs: editSpecs
 					.split(',')
 					.map((s) => s.trim())
-					.filter(Boolean)
+					.filter(Boolean),
+				status: editStatus
 			});
 			items = items.map((i) => (i.id === updated.id ? updated : i));
 			editing = null;
@@ -267,6 +281,18 @@
 						bind:value={editTitle}
 						class="w-full h-10 px-3 rounded-lg border border-input bg-background/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					/>
+				</div>
+				<div class="space-y-1.5">
+					<label for="edit-status" class="text-sm font-medium text-foreground">Status</label>
+					<select
+						id="edit-status"
+						bind:value={editStatus}
+						class="w-full h-10 px-3 rounded-lg border border-input bg-background/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					>
+						<option value="draft">Draft — hidden from the public gallery</option>
+						<option value="published">Published — visible on the site</option>
+						<option value="flagged">Flagged — hidden, needs review</option>
+					</select>
 				</div>
 				<div class="space-y-1.5">
 					<label for="edit-category" class="text-sm font-medium text-foreground">Category</label>
