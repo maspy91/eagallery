@@ -68,4 +68,4 @@
 
 <StatsSection />
 
-<Testimonials />
+<!-- <Testimonials /> -->
