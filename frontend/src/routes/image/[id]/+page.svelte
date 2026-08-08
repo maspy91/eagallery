@@ -1,14 +1,22 @@
 <script lang="ts">
 	// frontend/src/routes/image/[id]/+page.svelte
 	// EDITED FILE — replaces: src/routes/image/[id]/+page.svelte (whole-file replacement)
-	// Changes: dropped the `mockComments` lookup and the now-unused
-	// `CommentNode` import; CommentSection now takes `photoId` directly and
-	// fetches/posts real comments itself.
+	// Bug fix: toggleLike() checked $currentUser without waiting for
+	// authChecked first. On a fresh page load (e.g. navigating straight to
+	// an /image/<id> link), restoreSession() in the root layout is still
+	// resolving asynchronously when the page mounts -- $currentUser is
+	// still null for a brief moment even for an already-logged-in
+	// customer, so a click during that window incorrectly looked
+	// logged-out and redirected to /login. Same race condition class as
+	// the admin/dashboard layout guards fixed earlier, just never applied
+	// here. Fix: wait for $authChecked, and disable the like button
+	// entirely until it resolves so a click during that window does
+	// nothing instead of misfiring.
 
 	import { page } from '$app/stores';
 	import { ArrowLeft, Eye, Heart, Share2, ExternalLink, LoaderCircle } from '@lucide/svelte';
 	import CommentSection from '$lib/components/CommentSection.svelte';
-	import { currentUser } from '$lib/stores/auth';
+	import { currentUser, authChecked } from '$lib/stores/auth';
 	import { photosApi, type ApiPhoto } from '$lib/api';
 
 	$: id = $page.params.id;
@@ -42,7 +50,7 @@
 	$: load(id);
 
 	async function toggleLike() {
-		if (!item || likePending) return;
+		if (!item || likePending || !$authChecked) return;
 		if ($currentUser?.role !== 'customer') {
 			// Guests and admin/staff can view, but liking is a customer action.
 			window.location.href = '/login';
@@ -129,7 +137,7 @@
 						<div class="flex items-center gap-3">
 							<button
 								on:click={toggleLike}
-								disabled={likePending}
+								disabled={likePending || !$authChecked}
 								class="w-12 h-12 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 {item.liked
 									? 'bg-primary text-primary-foreground'
 									: 'bg-primary/10 text-primary hover:bg-primary/20'}"

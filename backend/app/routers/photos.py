@@ -1,5 +1,16 @@
+# backend/app/routers/photos.py
+# EDITED FILE — replaces: app/routers/photos.py (whole-file replacement)
+# Only change: get_photo() now records a PhotoView per distinct viewer
+# (customer id, or IP for guests) and only increments Photo.view_count the
+# first time a given viewer is seen, instead of incrementing on every
+# single fetch/refresh. See _record_view_and_maybe_increment() and
+# PhotoView's docstring in app/models/photo.py. Nothing else in this file
+# changed -- upload, create, list, update, delete, and like/unlike are
+# all exactly as before.
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -14,7 +25,7 @@ from app.core.deps import (
 from app.core.ip import get_client_ip
 from app.core.security_log import log_security_event
 from app.core.storage import delete_object, generate_object_key, generate_presigned_upload_url, public_url
-from app.models.photo import Photo, PhotoLike
+from app.models.photo import Photo, PhotoLike, PhotoView
 from app.models.user import User
 from app.schemas.photos import (
     LikeResponse,
@@ -151,9 +162,39 @@ async def list_photos(
     return [await _photo_out(db, p, viewer) for p in photos]
 
 
+async def _record_view_and_maybe_increment(
+    db: AsyncSession, photo: Photo, viewer: User | None, request: Request
+) -> None:
+    """Bumps Photo.view_count at most once per distinct viewer (see
+    PhotoView's docstring for how 'distinct viewer' is defined). Wrapped
+    in a SAVEPOINT (db.begin_nested()) rather than a plain insert: two
+    near-simultaneous requests from the same viewer (a double-click, two
+    tabs) could both pass the "not already viewed" check before either
+    commits -- the unique constraint on (photo_id, viewer_key) catches
+    that at the DB level, and the savepoint lets this function absorb
+    that conflict without poisoning the outer request's transaction.
+    Not incrementing on a lost race is the correct outcome here, not a
+    bug -- the point is exactly one count per viewer."""
+    viewer_key = f"customer:{viewer.id}" if viewer else f"ip:{get_client_ip(request) or 'unknown'}"
+
+    result = await db.execute(
+        select(PhotoView.id).where(PhotoView.photo_id == photo.id, PhotoView.viewer_key == viewer_key)
+    )
+    if result.scalar_one_or_none() is not None:
+        return  # already counted for this viewer
+
+    try:
+        async with db.begin_nested():
+            db.add(PhotoView(photo_id=photo.id, viewer_key=viewer_key))
+            await db.execute(update(Photo).where(Photo.id == photo.id).values(view_count=Photo.view_count + 1))
+    except IntegrityError:
+        pass  # lost a race to a concurrent request from the same viewer -- fine, already counted
+
+
 @router.get("/{photo_id}", response_model=PhotoOut)
 async def get_photo(
     photo_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     viewer: User | None = Depends(get_optional_customer),
     staff_viewer: User | None = Depends(get_optional_staff_or_admin),
@@ -169,10 +210,7 @@ async def get_photo(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Photo not found")
 
     if photo.status == "published":
-        # SQL-level increment (`view_count = view_count + 1`), not a
-        # read-modify-write on the Python object -- avoids two concurrent
-        # requests both reading N and both writing N+1 (losing a view).
-        await db.execute(update(Photo).where(Photo.id == photo.id).values(view_count=Photo.view_count + 1))
+        await _record_view_and_maybe_increment(db, photo, viewer, request)
         await db.commit()
         await db.refresh(photo)
 
