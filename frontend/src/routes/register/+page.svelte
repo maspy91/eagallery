@@ -12,8 +12,8 @@
 	import { currentUser, registerCustomer } from '$lib/stores/auth';
 	import { registerSchema } from '$lib/validation';
 	import { ApiError } from '$lib/api';
-	import { PUBLIC_TURNSTILE_SITE_KEY } from '$env/static/public';
-	import TurnstileWidget from '$lib/components/TurnstileWidget.svelte';
+	import { PUBLIC_TURNSTILE_SITE_KEY, PUBLIC_TURNSTILE_ENABLED } from '$env/static/public';
+	import { PUBLIC_TURNSTILE_SITE_KEY, PUBLIC_TURNSTILE_ENABLED } from '$env/static/public';
 
 	let name = '';
 	let email = '';
@@ -24,7 +24,7 @@
 	let formError = '';
 	let submitted = false;
 
-	const turnstileRequired = Boolean(PUBLIC_TURNSTILE_SITE_KEY);
+	const turnstileRequired = Boolean(PUBLIC_TURNSTILE_SITE_KEY && PUBLIC_TURNSTILE_ENABLED === 'true');
 	let turnstileToken: string | undefined;
 	let turnstileWidget: TurnstileWidget;
 

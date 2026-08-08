@@ -18,11 +18,13 @@
 	// client-side navigation between these auth pages.
 
 	import { onMount, onDestroy, createEventDispatcher } from 'svelte';
-	import { PUBLIC_TURNSTILE_SITE_KEY } from '$env/static/public';
+	import { PUBLIC_TURNSTILE_SITE_KEY, PUBLIC_TURNSTILE_ENABLED } from '$env/static/public';
 
 	const dispatch = createEventDispatcher<{ verified: string; expired: void; error: void }>();
 
-	export const enabled = Boolean(PUBLIC_TURNSTILE_SITE_KEY);
+	// Only enable the widget when a site key is present and the explicit
+	// public flag `PUBLIC_TURNSTILE_ENABLED` is truthy (set to the string "true").
+	export const enabled = Boolean(PUBLIC_TURNSTILE_SITE_KEY && PUBLIC_TURNSTILE_ENABLED === 'true');
 
 	let container: HTMLDivElement;
 	let widgetId: string | null = null;
