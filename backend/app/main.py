@@ -1,8 +1,3 @@
-# backend/app/main.py
-# EDITED FILE — replaces: app/main.py (whole-file replacement)
-# Assumes comments + conversations are already wired in from previous
-# rounds -- this just adds the notifications router on top.
-
 import logging
 from contextlib import asynccontextmanager
 

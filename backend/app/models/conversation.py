@@ -1,6 +1,3 @@
-# backend/app/models/conversation.py
-# NEW FILE — place at: app/models/conversation.py
-
 import uuid
 
 from sqlalchemy import Column, DateTime, ForeignKey, String, Text, func

@@ -1,11 +1,4 @@
 <script lang="ts">
-	// frontend/src/routes/dashboard/notifications/+page.svelte
-	// EDITED FILE — replaces: src/routes/dashboard/notifications/+page.svelte (whole-file replacement)
-	// Replaced mockNotifications with the real notifications store.
-	// markRead/markAllRead now call the real endpoints (via the store's
-	// optimistic-update-with-rollback helpers) instead of mutating local
-	// state directly.
-
 	import { onMount } from 'svelte';
 	import { Bell, MessageCircle, MessagesSquare, Info, CheckCheck, LoaderCircle } from '@lucide/svelte';
 	import {

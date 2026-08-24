@@ -1,5 +1,3 @@
-# backend/alembic/versions/0004_conversations.py
-# NEW FILE — place at: alembic/versions/0004_conversations.py
 """conversations, conversation_messages
 
 Revision ID: 0004
@@ -22,12 +20,7 @@ def upgrade() -> None:
     op.create_table(
         "conversations",
         sa.Column("id", sa.String(length=36), primary_key=True),
-        sa.Column(
-            "customer_id",
-            sa.String(length=36),
-            sa.ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
+        sa.Column("customer_id", sa.String(length=36), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("customer_name", sa.String(length=100), nullable=False),
         sa.Column("customer_email", sa.String(length=255), nullable=False),
         sa.Column("subject", sa.String(length=200), nullable=False),
@@ -42,17 +35,9 @@ def upgrade() -> None:
         "conversation_messages",
         sa.Column("id", sa.String(length=36), primary_key=True),
         sa.Column(
-            "conversation_id",
-            sa.String(length=36),
-            sa.ForeignKey("conversations.id", ondelete="CASCADE"),
-            nullable=False,
+            "conversation_id", sa.String(length=36), sa.ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
         ),
-        sa.Column(
-            "sender_id",
-            sa.String(length=36),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
+        sa.Column("sender_id", sa.String(length=36), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
         sa.Column("sender_role", sa.String(length=20), nullable=False),
         sa.Column("sender_name", sa.String(length=100), nullable=False),
         sa.Column("text", sa.Text(), nullable=False),

@@ -1,6 +1,3 @@
-# backend/app/core/notifications.py
-# NEW FILE — place at: app/core/notifications.py
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.notification import Notification

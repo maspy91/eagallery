@@ -1,6 +1,3 @@
-# backend/app/routers/notifications.py
-# NEW FILE — place at: app/routers/notifications.py
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -1,6 +1,3 @@
-// frontend/src/lib/stores/notifications.ts
-// NEW FILE — place at: src/lib/stores/notifications.ts
-
 import { writable, derived, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { notificationsApi, type ApiNotification } from '$lib/api';

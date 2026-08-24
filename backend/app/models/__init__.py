@@ -1,8 +1,3 @@
-# backend/app/models/__init__.py
-# EDITED FILE — replaces: app/models/__init__.py (whole-file replacement)
-# Assumes comments + conversations + notifications are already wired in
-# from previous rounds -- this just adds PhotoView on top.
-
 # Importing every model module here guarantees they're registered on
 # Base.metadata as soon as `app.models` is imported -- relied on by
 # alembic/env.py for autogenerate/upgrade, in addition to the dynamic

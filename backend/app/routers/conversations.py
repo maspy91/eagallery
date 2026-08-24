@@ -1,9 +1,3 @@
-# backend/app/routers/conversations.py
-# EDITED FILE — replaces: app/routers/conversations.py (whole-file replacement)
-# Only change: add_message() now notifies the customer when the reply
-# comes from admin/staff (no notification the other direction -- staff
-# don't have a notifications inbox in this design, see Navbar.svelte).
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

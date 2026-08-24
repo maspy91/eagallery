@@ -1,22 +1,10 @@
-// frontend/src/lib/api.ts
-// EDITED FILE — replaces: src/lib/api.ts (whole-file replacement)
-// Assumes commentsApi and conversationsApi are already in this file from
-// previous rounds. This round only adds notificationsApi at the bottom --
-// everything above it is unchanged from before.
-
-import { PUBLIC_API_URL } from '$env/static/public';
-
 /**
  * Every call includes `credentials: 'include'` so the httpOnly session
- * cookie (set by the backend on login/verify/accept-invite) is sent along.
- * PUBLIC_API_URL points at the backend's own URL (e.g. the Render deploy)
- * — this is a direct, cross-site call, not a same-origin proxy, which is
- * why the backend's session cookies default to SameSite=None (see
- * backend/app/core/config.py and DEPLOY.md for the full reasoning and the
- * same-origin-proxy alternative if you'd rather avoid third-party cookies
- * later).
+ * cookie (set by the backend on login/verify/accept-invite) is sent
+ * along. /api/* is always same-origin now (proxied -- vercel.json in
+ * production, vite.config.ts's server.proxy in dev), so every path here
+ * is relative with no base URL to configure.
  */
-const BASE = PUBLIC_API_URL?.replace(/\/$/, '') ?? '';
 
 export class ApiError extends Error {
 	status: number;
@@ -27,7 +15,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-	const res = await fetch(`${BASE}${path}`, {
+	const res = await fetch(path, {
 		credentials: 'include',
 		headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
 		...options
@@ -166,9 +154,10 @@ export const photosApi = {
 	remove: (id: string) => del<MessageResponse>(`/api/photos/${id}`),
 	toggleLike: (id: string) => post<{ liked: boolean; likeCount: number }>(`/api/photos/${id}/like`, {}),
 	/**
-	 * Uploads a file directly to R2 with the presigned URL from
+	 * Uploads a file directly to storage with the presigned URL from
 	 * getUploadUrl(). Deliberately NOT routed through `request()` above --
-	 * this goes straight to R2, not this backend, and isn't JSON.
+	 * this goes straight to the storage provider, not this backend, and
+	 * isn't JSON.
 	 */
 	uploadToStorage: async (uploadUrl: string, file: File) => {
 		const res = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });

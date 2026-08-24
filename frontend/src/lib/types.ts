@@ -1,9 +1,3 @@
-// frontend/src/lib/types.ts
-// EDITED FILE — replaces: src/lib/types.ts (whole-file replacement)
-// This round's change: AppNotification.id is now `string` (same UUID
-// reasoning as every other id migration before it). Everything else
-// unchanged from last round.
-
 export type Permission =
 	| 'photos:manage' // upload, edit, delete, organize
 	| 'roles:manage' // create/assign/revoke admin-assigned roles

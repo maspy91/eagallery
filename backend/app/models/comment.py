@@ -1,6 +1,3 @@
-# backend/app/models/comment.py
-# NEW FILE — place at: app/models/comment.py
-
 import uuid
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text, func

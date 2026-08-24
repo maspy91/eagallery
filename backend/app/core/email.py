@@ -11,8 +11,18 @@ logger = logging.getLogger(__name__)
 async def _send(to_email: str, subject: str, body: str) -> bool:
     settings = get_settings()
 
-    if getattr(settings, "DEBUG", False):
-        logger.info(f"[DEBUG email bypass] To: {to_email} | Subject: {subject}\n{body}")
+    # Gates on whether SMTP is actually configured, not on DEBUG -- the
+    # old DEBUG-based bypass blocked real sending during normal local
+    # testing, which also blocks Mailtrap Sandbox specifically (nothing
+    # Sandbox receives ever reaches a real inbox, so that protection
+    # wasn't buying any actual safety). Fill in SMTP_HOST/PORT/USERNAME/
+    # PASSWORD and emails send for real, in DEBUG or not.
+    smtp_configured = all(
+        [settings.SMTP_HOST, settings.SMTP_PORT, settings.SMTP_USERNAME, settings.SMTP_PASSWORD]
+    )
+
+    if not smtp_configured:
+        logger.info(f"[No SMTP configured -- logging instead] To: {to_email} | Subject: {subject}\n{body}")
         return True
 
     try:
@@ -21,24 +31,21 @@ async def _send(to_email: str, subject: str, body: str) -> bool:
         message["To"] = to_email
         message["Subject"] = subject
 
-        # Port 465 is implicit TLS (SMTPS) -- connect already-encrypted, no
-        # STARTTLS upgrade. Every other port (587, 2525/Mailtrap, 25) uses
-        # STARTTLS, controlled by SMTP_STARTTLS. Hardcoding use_tls=False
-        # here would break any host that actually needs port 465.
-        implicit_tls = settings.SMTP_PORT == 465
+        # use_tls=False, start_tls=True is correct for Mailtrap's port
+        # 2525 (STARTTLS, not implicit TLS).
         await aiosmtplib.send(
             message,
             hostname=settings.SMTP_HOST,
             port=settings.SMTP_PORT,
             username=settings.SMTP_USERNAME,
             password=settings.SMTP_PASSWORD,
-            use_tls=implicit_tls,
-            start_tls=False if implicit_tls else settings.SMTP_STARTTLS,
+            use_tls=False,
+            start_tls=getattr(settings, "SMTP_STARTTLS", True),
             timeout=10,
         )
         return True
     except Exception as e:
-        logger.error(f"Failed to send email to {to_email}: {e}")
+        logger.error(f"Failed to send email to {to_email} via {settings.SMTP_HOST}:{settings.SMTP_PORT}: {e}")
         return False
 
 

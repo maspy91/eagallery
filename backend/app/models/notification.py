@@ -1,6 +1,3 @@
-# backend/app/models/notification.py
-# NEW FILE — place at: app/models/notification.py
-
 import uuid
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, func

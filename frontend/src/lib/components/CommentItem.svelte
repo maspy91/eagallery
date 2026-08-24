@@ -1,10 +1,4 @@
 <script lang="ts">
-	// frontend/src/lib/components/CommentItem.svelte
-	// EDITED FILE — replaces: src/lib/components/CommentItem.svelte (whole-file replacement)
-	// Only change: the reply event's `commentId` is now `string` (matches
-	// CommentNode.id, which moved from number to string to hold real backend
-	// UUIDs). No visual/behavioral changes.
-
 	import { Reply, Send } from '@lucide/svelte';
 	import type { CommentNode } from '$lib/types';
 	import { createEventDispatcher } from 'svelte';

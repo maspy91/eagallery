@@ -1,6 +1,3 @@
-# backend/tests/test_comments.py
-# NEW FILE — place at: tests/test_comments.py
-
 """
 Comments end to end: guest comment -> nested reply -> tree shape on GET ->
 staff can't moderate (needs comments:moderate, which staff has -- so this
@@ -74,7 +71,6 @@ async def _login_customer(client, customer_user):
 
 
 async def test_guest_comment_and_customer_reply_build_a_tree(client, published_photo, customer_user):
-    # Guest (no session) can comment.
     resp = await client.post(f"/api/photos/{published_photo.id}/comments", json={"text": "Nice watch!"})
     assert resp.status_code == 201, resp.text
     root = resp.json()

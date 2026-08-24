@@ -61,6 +61,21 @@ class Settings(BaseSettings):
     AI_RATE_LIMIT_MAX_REQUESTS: int = 20
     AI_RATE_LIMIT_WINDOW_MINUTES: int = 60
 
+    # ---- Google OAuth2 (customer "Sign in with Google" only -- admin/
+    # staff never authenticate this way, same reasoning as why they have
+    # a separate login system from customers in the first place) ----
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+    # Must exactly match a redirect URI registered in Google Cloud
+    # Console (Credentials -> your OAuth client -> Authorized redirect
+    # URIs) or Google rejects the callback. Points at the FRONTEND now
+    # (proxied through to this backend via vercel.json / vite.config.ts),
+    # not this backend's own URL directly -- that's what makes the
+    # session cookie set during the OAuth callback land on the frontend's
+    # own origin instead of this backend's, consistent with every other
+    # login path post-proxy-migration.
+    GOOGLE_REDIRECT_URI: str | None = None
+
     # ---- Admin bootstrap ----
     ADMIN_EMAIL: str | None = None
     ADMIN_PASSWORD: str | None = None
@@ -94,6 +109,16 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Partial Supabase Storage configuration detected. Set all of SUPABASE_URL, "
                 "SUPABASE_KEY, and SUPABASE_STORAGE_BUCKET, or none of them."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_google_oauth(self):
+        g_fields = [self.GOOGLE_CLIENT_ID, self.GOOGLE_CLIENT_SECRET, self.GOOGLE_REDIRECT_URI]
+        if any(g_fields) and not all(g_fields):
+            raise ValueError(
+                "Partial Google OAuth configuration detected. Set all of GOOGLE_CLIENT_ID, "
+                "GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI, or none of them."
             )
         return self
 

@@ -1,10 +1,3 @@
-# backend/app/routers/comments.py
-# EDITED FILE — replaces: app/routers/comments.py (whole-file replacement)
-# Only change: create_comment() now creates a notification for the parent
-# comment's author when the new comment is a reply (skipped for guest
-# parents, who have no account to notify, and for replying to your own
-# comment).
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

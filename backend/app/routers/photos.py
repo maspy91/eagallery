@@ -1,13 +1,3 @@
-# backend/app/routers/photos.py
-# EDITED FILE — replaces: app/routers/photos.py (whole-file replacement)
-# Only change: get_photo() now records a PhotoView per distinct viewer
-# (customer id, or IP for guests) and only increments Photo.view_count the
-# first time a given viewer is seen, instead of incrementing on every
-# single fetch/refresh. See _record_view_and_maybe_increment() and
-# PhotoView's docstring in app/models/photo.py. Nothing else in this file
-# changed -- upload, create, list, update, delete, and like/unlike are
-# all exactly as before.
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -74,15 +64,15 @@ async def _photo_out(db: AsyncSession, photo: Photo, viewer: User | None) -> Pho
     dependencies=[Depends(require_permission("photos:manage"))],
 )
 async def get_upload_url(payload: UploadUrlRequest):
-    """Step 1 of 2: the client PUTs the file directly to R2 with the
-    returned presigned URL -- the file's bytes never pass through this API
-    server, only the (tiny) signed-URL request/response does. Step 2 is
-    POST /api/photos, once the direct upload has succeeded."""
+    """Step 1 of 2: the client PUTs the file directly to storage with the
+    returned presigned URL -- the file's bytes never pass through this
+    API server, only the (tiny) signed-URL request/response does. Step 2
+    is POST /api/photos, once the direct upload has succeeded."""
     if payload.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unsupported file type")
 
     object_key = generate_object_key(payload.filename)
-    # boto3 is sync -- keep it off the event loop (see app/core/storage.py).
+    # The storage SDK call is sync -- keep it off the event loop.
     upload_url = await run_in_threadpool(generate_presigned_upload_url, object_key, payload.content_type)
 
     return UploadUrlResponse(objectKey=object_key, uploadUrl=upload_url, publicUrl=public_url(object_key))
@@ -162,35 +152,6 @@ async def list_photos(
     return [await _photo_out(db, p, viewer) for p in photos]
 
 
-async def _record_view_and_maybe_increment(
-    db: AsyncSession, photo: Photo, viewer: User | None, request: Request
-) -> None:
-    """Bumps Photo.view_count at most once per distinct viewer (see
-    PhotoView's docstring for how 'distinct viewer' is defined). Wrapped
-    in a SAVEPOINT (db.begin_nested()) rather than a plain insert: two
-    near-simultaneous requests from the same viewer (a double-click, two
-    tabs) could both pass the "not already viewed" check before either
-    commits -- the unique constraint on (photo_id, viewer_key) catches
-    that at the DB level, and the savepoint lets this function absorb
-    that conflict without poisoning the outer request's transaction.
-    Not incrementing on a lost race is the correct outcome here, not a
-    bug -- the point is exactly one count per viewer."""
-    viewer_key = f"customer:{viewer.id}" if viewer else f"ip:{get_client_ip(request) or 'unknown'}"
-
-    result = await db.execute(
-        select(PhotoView.id).where(PhotoView.photo_id == photo.id, PhotoView.viewer_key == viewer_key)
-    )
-    if result.scalar_one_or_none() is not None:
-        return  # already counted for this viewer
-
-    try:
-        async with db.begin_nested():
-            db.add(PhotoView(photo_id=photo.id, viewer_key=viewer_key))
-            await db.execute(update(Photo).where(Photo.id == photo.id).values(view_count=Photo.view_count + 1))
-    except IntegrityError:
-        pass  # lost a race to a concurrent request from the same viewer -- fine, already counted
-
-
 @router.get("/{photo_id}", response_model=PhotoOut)
 async def get_photo(
     photo_id: str,
@@ -210,11 +171,45 @@ async def get_photo(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Photo not found")
 
     if photo.status == "published":
-        await _record_view_and_maybe_increment(db, photo, viewer, request)
-        await db.commit()
-        await db.refresh(photo)
+        await _record_view_if_new(db, photo, viewer, staff_viewer, request)
 
     return await _photo_out(db, photo, viewer)
+
+
+async def _record_view_if_new(
+    db: AsyncSession, photo: Photo, viewer: User | None, staff_viewer: User | None, request: Request
+) -> None:
+    """Bumps Photo.view_count at most once per distinct viewer (see
+    PhotoView's docstring for how 'distinct viewer' is defined). Wrapped
+    in a SAVEPOINT + IntegrityError catch, not a check-then-insert,
+    because two near-simultaneous requests from the same person (double
+    tab, double click) could both pass a plain existence check before
+    either commits -- the unique constraint is the real guard, this is
+    just how to fail that gracefully instead of a 500."""
+    if staff_viewer is not None:
+        # Admin/staff previewing their own published photos shouldn't
+        # inflate the public view count.
+        return
+
+    viewer_key = f"customer:{viewer.id}" if viewer is not None else f"ip:{get_client_ip(request)}"
+
+    result = await db.execute(
+        select(PhotoView.id).where(PhotoView.photo_id == photo.id, PhotoView.viewer_key == viewer_key)
+    )
+    if result.scalar_one_or_none() is not None:
+        return  # already counted for this viewer
+
+    try:
+        async with db.begin_nested():  # SAVEPOINT -- rolls back just this insert on conflict, not the whole request
+            db.add(PhotoView(photo_id=photo.id, viewer_key=viewer_key))
+            await db.execute(update(Photo).where(Photo.id == photo.id).values(view_count=Photo.view_count + 1))
+    except IntegrityError:
+        # Lost the race to a concurrent request for the same viewer --
+        # that request's insert already counted the view, nothing more to do.
+        return
+
+    await db.commit()
+    await db.refresh(photo)
 
 
 # ---- Write (admin/staff only, requires photos:manage) ----
@@ -265,9 +260,9 @@ async def delete_photo(photo_id: str, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
     # Best-effort: the DB row is already gone (that's what makes the photo
-    # disappear from the app), so an R2-side failure here shouldn't turn
-    # into a 500 for something the user already sees as deleted -- it just
-    # leaves an orphaned object in the bucket to clean up later.
+    # disappear from the app), so a storage-side failure here shouldn't
+    # turn into a 500 for something the user already sees as deleted -- it
+    # just leaves an orphaned object in the bucket to clean up later.
     try:
         await run_in_threadpool(delete_object, object_key)
     except Exception:

@@ -1,6 +1,3 @@
-# backend/app/schemas/comments.py
-# NEW FILE — place at: app/schemas/comments.py
-
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
@@ -16,7 +13,6 @@ class ModerateCommentRequest(BaseModel):
 
 
 class CommentOut(BaseModel):
-    # camelCase to match the frontend's CommentNode type (src/lib/types.ts).
     id: str
     author: str
     authorId: str | None

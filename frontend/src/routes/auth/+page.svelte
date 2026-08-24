@@ -1,16 +1,11 @@
 <script lang="ts">
-	// frontend/src/routes/auth/+page.svelte
-	// EDITED FILE — replaces: src/routes/auth/+page.svelte (whole-file replacement)
-	// This page already had a placeholder div (further along than the
-	// other two forms) -- replaced it with the actual widget component.
-
 	import { goto } from '$app/navigation';
 	import { z } from 'zod';
 	import { Eye, EyeOff, Shield, Lock, Mail, Sparkles, CircleCheckBig } from '@lucide/svelte';
 	import { currentUser, loginAdmin } from '$lib/stores/auth';
 	import { onMount } from 'svelte';
 	import { ApiError } from '$lib/api';
-	import { PUBLIC_TURNSTILE_SITE_KEY, PUBLIC_TURNSTILE_ENABLED } from '$env/static/public';
+	import { PUBLIC_TURNSTILE_SITE_KEY } from '$env/static/public';
 	import TurnstileWidget from '$lib/components/TurnstileWidget.svelte';
 
 	const authSchema = z.object({
@@ -24,7 +19,7 @@
 	let loading = false;
 	let formError = '';
 
-	const turnstileRequired = Boolean(PUBLIC_TURNSTILE_SITE_KEY && PUBLIC_TURNSTILE_ENABLED === 'true');
+	const turnstileRequired = Boolean(PUBLIC_TURNSTILE_SITE_KEY);
 	let turnstileToken: string | undefined;
 	let turnstileWidget: TurnstileWidget;
 

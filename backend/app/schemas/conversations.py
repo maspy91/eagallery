@@ -1,6 +1,3 @@
-# backend/app/schemas/conversations.py
-# NEW FILE — place at: app/schemas/conversations.py
-
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -23,8 +20,6 @@ class ConversationStatusRequest(BaseModel):
 
 
 class ConversationMessageOut(BaseModel):
-    # camelCase to match the frontend's ConversationMessage type
-    # (src/lib/types.ts).
     id: str
     senderRole: SenderRole
     senderName: str
@@ -33,7 +28,6 @@ class ConversationMessageOut(BaseModel):
 
 
 class ConversationOut(BaseModel):
-    # camelCase to match the frontend's BusinessConversation type.
     id: str
     customerId: str
     customerName: str

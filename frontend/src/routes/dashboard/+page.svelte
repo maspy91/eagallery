@@ -1,13 +1,8 @@
 <script lang="ts">
-	// frontend/src/routes/dashboard/+page.svelte
-	// EDITED FILE — replaces: src/routes/dashboard/+page.svelte (whole-file replacement)
-	// Changes: "Unread notifications" now reads the real notifications
-	// store. "Open conversations" now fetches real data via
-	// conversationsApi.listMine() (this was flagged as a stale-data gap
-	// after the conversations round, fixed here since this file needed
-	// touching anyway). "Post threads you're in" is UNCHANGED and still
-	// reads mockComments -- that's the separate dashboard/conversations
-	// comment-thread feature, still out of scope.
+	// "Unread notifications" reads the real notifications store.
+	// "Open conversations" fetches real data via conversationsApi.listMine().
+	// "Post threads you're in" is UNCHANGED and still reads mockComments --
+	// that's the separate dashboard/conversations comment-thread feature.
 
 	import { onMount } from 'svelte';
 	import { Bell, Inbox, MessagesSquare, Plus } from '@lucide/svelte';

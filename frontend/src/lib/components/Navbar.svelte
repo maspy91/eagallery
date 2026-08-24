@@ -1,13 +1,6 @@
 <script lang="ts">
-	// frontend/src/lib/components/Navbar.svelte
-	// EDITED FILE — replaces: src/lib/components/Navbar.svelte (whole-file replacement)
-	// Only change to this block: unreadCount is now read from the real
-	// notifications store instead of mockNotifications. The store itself
-	// is populated by stores/auth.ts on session restore/login, so Navbar
-	// doesn't need its own fetch -- it just reads whatever's already
-	// there. Everything below this script block is unchanged.
-
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { currentUser, logout } from '$lib/stores/auth';
 	import { unreadCount as unreadCountStore } from '$lib/stores/notifications';
 	import ThemeToggle from './ThemeToggle.svelte';
@@ -17,6 +10,11 @@
 	$: isCustomer = $currentUser?.role === 'customer';
 
 	$: unreadCount = isCustomer ? $unreadCountStore : 0;
+
+	async function handleLogout() {
+		await logout();
+		goto('/');
+	}
 
 	let mobileOpen = false;
 	$: $page.url.pathname, (mobileOpen = false);
@@ -100,7 +98,7 @@
 						<span>{$currentUser.name}</span>
 					</div>
 					<button
-						on:click={logout}
+						on:click={handleLogout}
 						class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-destructive transition-smooth"
 						aria-label="Sign out"
 					>
@@ -204,7 +202,7 @@
 							</div>
 						</div>
 						<button
-							on:click={logout}
+							on:click={handleLogout}
 							class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-destructive transition-smooth px-2 py-1"
 						>
 							<LogOut class="w-4 h-4" />

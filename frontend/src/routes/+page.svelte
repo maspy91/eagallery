@@ -42,7 +42,7 @@
 <section class="max-w-7xl mx-auto px-4 py-20">
 	<div class="mb-12 animate-fade-in">
 		<h2 class="text-4xl font-bold text-foreground mb-4">Featured Collection</h2>
-		<p class="text-lg text-muted-foreground">Explore our curated selection of cutting-edge designs</p>
+		<p class="text-lg text-muted-foreground">Explore our curated selection of cutting-edge products</p>
 	</div>
 
 	{#if loading}
@@ -68,4 +68,4 @@
 
 <StatsSection />
 
-<!-- <Testimonials /> -->
+<Testimonials />

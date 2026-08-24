@@ -1,5 +1,3 @@
-# backend/alembic/versions/0003_comments.py
-# NEW FILE — place at: alembic/versions/0003_comments.py
 """comments
 
 Revision ID: 0003
@@ -22,24 +20,9 @@ def upgrade() -> None:
     op.create_table(
         "comments",
         sa.Column("id", sa.String(length=36), primary_key=True),
-        sa.Column(
-            "photo_id",
-            sa.String(length=36),
-            sa.ForeignKey("photos.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        sa.Column(
-            "parent_id",
-            sa.String(length=36),
-            sa.ForeignKey("comments.id", ondelete="CASCADE"),
-            nullable=True,
-        ),
-        sa.Column(
-            "author_id",
-            sa.String(length=36),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
+        sa.Column("photo_id", sa.String(length=36), sa.ForeignKey("photos.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("parent_id", sa.String(length=36), sa.ForeignKey("comments.id", ondelete="CASCADE"), nullable=True),
+        sa.Column("author_id", sa.String(length=36), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
         sa.Column("author_name", sa.String(length=100), nullable=False),
         sa.Column("text", sa.Text(), nullable=False),
         sa.Column("is_flagged", sa.Boolean(), nullable=False, server_default=sa.false()),

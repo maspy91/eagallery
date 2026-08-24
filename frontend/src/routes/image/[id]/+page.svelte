@@ -1,18 +1,4 @@
 <script lang="ts">
-	// frontend/src/routes/image/[id]/+page.svelte
-	// EDITED FILE — replaces: src/routes/image/[id]/+page.svelte (whole-file replacement)
-	// Bug fix: toggleLike() checked $currentUser without waiting for
-	// authChecked first. On a fresh page load (e.g. navigating straight to
-	// an /image/<id> link), restoreSession() in the root layout is still
-	// resolving asynchronously when the page mounts -- $currentUser is
-	// still null for a brief moment even for an already-logged-in
-	// customer, so a click during that window incorrectly looked
-	// logged-out and redirected to /login. Same race condition class as
-	// the admin/dashboard layout guards fixed earlier, just never applied
-	// here. Fix: wait for $authChecked, and disable the like button
-	// entirely until it resolves so a click during that window does
-	// nothing instead of misfiring.
-
 	import { page } from '$app/stores';
 	import { ArrowLeft, Eye, Heart, Share2, ExternalLink, LoaderCircle } from '@lucide/svelte';
 	import CommentSection from '$lib/components/CommentSection.svelte';

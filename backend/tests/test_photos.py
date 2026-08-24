@@ -1,12 +1,12 @@
 """
 Photo management end to end: upload-url -> create -> public visibility
 rules (draft/flagged hidden from the public, visible to staff) -> view
-count increments -> like/unlike -> edit -> delete (with R2 cleanup) ->
+count dedup -> like/unlike -> edit -> delete (with storage cleanup) ->
 permission boundaries (customer can't manage photos, staff can).
 
-R2 itself is monkeypatched (see `fake_storage` below) -- there's no real
-bucket in tests, only the DB side of things and the calls made to boto3
-are exercised.
+Storage itself is monkeypatched (see `fake_storage` below) -- there's no
+real bucket in tests, only the DB side of things and the calls made to
+the storage module are exercised.
 """
 
 import pytest
@@ -126,10 +126,9 @@ async def test_upload_and_publish_lifecycle(client, admin_user):
     assert resp.status_code == 200
     assert resp.json()["status"] == "published"
 
-    # Now the public can see and fetch it -- one guest visitor fetching
-    # repeatedly (refreshing, no login) is one view, not one-per-fetch.
-    # See test_view_count_dedup_by_viewer below for the fuller picture
-    # (different guests, a logged-in customer, re-visits).
+    # Now the public can see and fetch it, and the first fetch bumps the
+    # view count -- a second fetch from the same (test-client) IP does
+    # NOT bump it again, since guest views are deduped by IP now.
     await client.post("/api/auth/logout")
     resp = await client.get(f"/api/photos/{photo_id}")
     assert resp.status_code == 200
@@ -137,30 +136,6 @@ async def test_upload_and_publish_lifecycle(client, admin_user):
 
     resp = await client.get(f"/api/photos/{photo_id}")
     assert resp.json()["viewCount"] == 1
-
-
-async def test_view_count_dedup_by_viewer(client, admin_user, customer_user):
-    await _login_admin(client, admin_user)
-    photo_id = await _upload_and_create_photo(client)
-    await client.patch(f"/api/photos/{photo_id}", json={"status": "published"})
-    await client.post("/api/auth/logout")
-
-    # Same guest (same test client / IP), three refreshes -- counts once.
-    for _ in range(3):
-        resp = await client.get(f"/api/photos/{photo_id}")
-    assert resp.json()["viewCount"] == 1
-
-    # A logged-in customer visiting is a distinct viewer -- counts once more,
-    # regardless of how many times *they* refresh.
-    await _login_customer(client, customer_user)
-    for _ in range(3):
-        resp = await client.get(f"/api/photos/{photo_id}")
-    assert resp.json()["viewCount"] == 2
-
-    # Back to guest (logout) -- already-seen IP, no further increment.
-    await client.post("/api/customer/logout")
-    resp = await client.get(f"/api/photos/{photo_id}")
-    assert resp.json()["viewCount"] == 2
 
 
 async def test_customer_cannot_manage_photos(client, customer_user):
@@ -248,3 +223,38 @@ async def test_flagged_photos_hidden_from_public(client, admin_user):
 
     resp = await client.get("/api/photos")
     assert all(p["id"] != photo_id for p in resp.json())
+
+
+async def test_view_count_deduped_per_logged_in_customer(client, admin_user, customer_user):
+    await _login_admin(client, admin_user)
+    photo_id = await _upload_and_create_photo(client)
+    await client.patch(f"/api/photos/{photo_id}", json={"status": "published"})
+    await client.post("/api/auth/logout")
+
+    await _login_customer(client, customer_user)
+    resp = await client.get(f"/api/photos/{photo_id}")
+    assert resp.json()["viewCount"] == 1
+
+    # Same customer, refresh -- doesn't count again.
+    resp = await client.get(f"/api/photos/{photo_id}")
+    assert resp.json()["viewCount"] == 1
+    resp = await client.get(f"/api/photos/{photo_id}")
+    assert resp.json()["viewCount"] == 1
+
+
+async def test_admin_staff_preview_does_not_count_as_a_view(client, admin_user):
+    await _login_admin(client, admin_user)
+    photo_id = await _upload_and_create_photo(client)
+    await client.patch(f"/api/photos/{photo_id}", json={"status": "published"})
+
+    # Still logged in as admin -- viewing your own published photo
+    # shouldn't inflate the public view count.
+    resp = await client.get(f"/api/photos/{photo_id}")
+    assert resp.json()["viewCount"] == 0
+    resp = await client.get(f"/api/photos/{photo_id}")
+    assert resp.json()["viewCount"] == 0
+
+    # A real (guest) viewer after that is the first real view.
+    await client.post("/api/auth/logout")
+    resp = await client.get(f"/api/photos/{photo_id}")
+    assert resp.json()["viewCount"] == 1

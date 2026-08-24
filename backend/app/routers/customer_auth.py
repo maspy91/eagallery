@@ -1,4 +1,7 @@
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,6 +10,7 @@ from app.core.database import get_db
 from app.core.deps import CUSTOMER_COOKIE, get_current_customer
 from app.core.email import send_verification_email
 from app.core.ip import get_client_ip
+from app.core.oauth_google import build_authorization_url, exchange_code_for_tokens, fetch_google_userinfo
 from app.core.rate_limit import check_and_increment
 from app.core.security import create_access_token, hash_password, verify_password
 from app.core.security_log import log_security_event
@@ -24,6 +28,11 @@ from app.schemas.auth import (
 )
 
 router = APIRouter(prefix="/api/customer", tags=["customer-auth"])
+
+# Short-lived, separate from CUSTOMER_COOKIE -- only ever holds a random
+# CSRF token during the ~seconds-long round trip to Google and back, never
+# an identity. Cleared as soon as the callback consumes it.
+OAUTH_STATE_COOKIE = "oauth_state"
 
 
 def _user_out(user: User) -> UserOut:
@@ -217,3 +226,118 @@ async def logout(response: Response):
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_customer)):
     return _user_out(user)
+
+
+# ---- Google OAuth2 ("Sign in with Google") ----
+#
+# Both of these are meant to be hit via full browser navigation (an <a
+# href> or window.location.href on the frontend), never fetch()/XHR --
+# that's how OAuth redirect flows work. Post-proxy-migration, the login
+# link is a relative /api/... path (same-origin via vercel.json/
+# vite.config.ts), and GOOGLE_REDIRECT_URI points at the frontend's own
+# domain too -- so the session cookie set on callback lands on the
+# frontend's origin, consistent with every other login path.
+
+
+@router.get("/oauth/google/login")
+async def google_oauth_login():
+    settings = get_settings()
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Google sign-in is not configured")
+
+    state = generate_raw_token()
+    redirect = RedirectResponse(build_authorization_url(state))
+    redirect.set_cookie(
+        key=OAUTH_STATE_COOKIE,
+        value=state,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+        max_age=600,  # the whole Google round trip should take seconds, not 10 minutes -- generous on purpose
+        path="/",
+    )
+    return redirect
+
+
+@router.get("/oauth/google/callback")
+async def google_oauth_callback(request: Request, db: AsyncSession = Depends(get_db)):
+    settings = get_settings()
+    frontend_url = settings.FRONTEND_URL.rstrip("/")
+
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")
+    cookie_state = request.cookies.get(OAUTH_STATE_COOKIE)
+
+    # Missing/mismatched state means either a stale link, a direct hit on
+    # this URL, or an actual CSRF attempt -- all get the same generic
+    # bounce, no detail on which.
+    if not code or not state or not cookie_state or not secrets.compare_digest(state, cookie_state):
+        return RedirectResponse(f"{frontend_url}/login?error=oauth_failed")
+
+    try:
+        tokens = await exchange_code_for_tokens(code)
+        userinfo = await fetch_google_userinfo(tokens["access_token"])
+    except Exception:
+        # Any failure talking to Google (expired code, network hiccup,
+        # revoked consent mid-flow) is opaque to the person -- they just
+        # see "something went wrong, try again" on the login page.
+        return RedirectResponse(f"{frontend_url}/login?error=oauth_failed")
+
+    google_id = userinfo.get("sub")
+    email = (userinfo.get("email") or "").lower().strip()
+    name = (userinfo.get("name") or "").strip() or (email.split("@")[0] if email else "Google User")
+
+    if not google_id or not email:
+        return RedirectResponse(f"{frontend_url}/login?error=oauth_failed")
+
+    # 1. Already linked to this Google account -- straightforward login.
+    result = await db.execute(select(User).where(User.google_id == google_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        # 2. Not linked yet -- does a password-based account already own
+        # this email? Google has already verified the email address, so
+        # linking here is safe: it's an addition (Google becomes a second
+        # way in), never a takeover -- the original password keeps working.
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+
+        if user:
+            if user.role != "customer":
+                # Never let a Google login attach to an admin/staff account
+                # -- that side never authenticates this way, full stop.
+                return RedirectResponse(f"{frontend_url}/login?error=oauth_failed")
+            user.google_id = google_id
+            if not user.email_verified:
+                user.email_verified = True
+        else:
+            # 3. Brand new account. No password was ever chosen for it --
+            # fill the NOT NULL column with a random value nobody knows and
+            # verify_password() can never match, so password login stays
+            # impossible until they deliberately set one via
+            # forgot-password. They can still always sign in with Google.
+            user = User(
+                email=email,
+                name=name,
+                password_hash=hash_password(secrets.token_urlsafe(32)),
+                role="customer",
+                email_verified=True,
+                is_active=True,
+                google_id=google_id,
+            )
+            db.add(user)
+
+    if not user.is_active:
+        return RedirectResponse(f"{frontend_url}/login?error=account_disabled")
+
+    await db.commit()
+    await db.refresh(user)
+
+    await log_security_event(
+        db, "login", "success", user_id=user.id, ip_address=get_client_ip(request), details="method=google_oauth"
+    )
+
+    redirect = RedirectResponse(f"{frontend_url}/dashboard")
+    redirect.delete_cookie(OAUTH_STATE_COOKIE, path="/")
+    _set_session_cookie(redirect, user)  # RedirectResponse is a Response subclass -- same helper as password login
+    return redirect

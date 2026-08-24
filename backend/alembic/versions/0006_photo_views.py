@@ -1,6 +1,4 @@
-# backend/alembic/versions/0006_photo_views.py
-# NEW FILE — place at: alembic/versions/0006_photo_views.py
-"""photo_views
+"""photo_views (deduped view counting)
 
 Revision ID: 0006
 Revises: 0005
@@ -22,13 +20,8 @@ def upgrade() -> None:
     op.create_table(
         "photo_views",
         sa.Column("id", sa.String(length=36), primary_key=True),
-        sa.Column(
-            "photo_id",
-            sa.String(length=36),
-            sa.ForeignKey("photos.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        sa.Column("viewer_key", sa.String(length=200), nullable=False),
+        sa.Column("photo_id", sa.String(length=36), sa.ForeignKey("photos.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("viewer_key", sa.String(length=255), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.UniqueConstraint("photo_id", "viewer_key", name="uq_photo_views_photo_viewer"),
     )

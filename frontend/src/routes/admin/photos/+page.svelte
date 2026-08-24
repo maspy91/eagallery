@@ -1,15 +1,4 @@
 <script lang="ts">
-	// frontend/src/routes/admin/photos/+page.svelte
-	// EDITED FILE — replaces: src/routes/admin/photos/+page.svelte (whole-file replacement)
-	// Fix: the edit dialog that auto-opens right after upload had no status
-	// control at all -- publishing only existed as a small, easy-to-miss
-	// clickable badge back in the table, with no indication in the dialog
-	// itself that it existed. Added a Status selector directly into the
-	// dialog (editStatus, initialized in startEdit(), included in the
-	// saveEdit() payload). The table badge still works too, for quickly
-	// changing status without opening the dialog -- this is additive, not
-	// a replacement.
-
 	import { onMount } from 'svelte';
 	import { Upload, Pencil, Trash2, Eye, Heart, LoaderCircle, X } from '@lucide/svelte';
 	import { photosApi, type ApiPhoto, ApiError } from '$lib/api';
@@ -79,7 +68,7 @@
 				specs: []
 			});
 			items = [created, ...items];
-			// Jump straight into editing so the title/category get filled in.
+			// Jump straight into editing so the title/category/status get filled in.
 			startEdit(created);
 		} catch (err) {
 			uploadError = err instanceof ApiError ? err.message : 'Upload failed. Please try again.';

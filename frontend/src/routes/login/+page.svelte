@@ -1,17 +1,12 @@
 <script lang="ts">
-	// frontend/src/routes/login/+page.svelte
-	// EDITED FILE — replaces: src/routes/login/+page.svelte (whole-file replacement)
-	// Adds the Turnstile widget where the Phase 2 placeholder comment was.
-	// Same graceful no-op behavior as register/+page.svelte when
-	// PUBLIC_TURNSTILE_SITE_KEY isn't set.
-
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import { User, Lock, Mail, Eye, EyeOff } from '@lucide/svelte';
 	import { currentUser, loginCustomer } from '$lib/stores/auth';
 	import { loginSchema } from '$lib/validation';
 	import { ApiError } from '$lib/api';
-	import { PUBLIC_TURNSTILE_SITE_KEY, PUBLIC_TURNSTILE_ENABLED } from '$env/static/public';
+	import { PUBLIC_TURNSTILE_SITE_KEY } from '$env/static/public';
 	import TurnstileWidget from '$lib/components/TurnstileWidget.svelte';
 
 	let email = '';
@@ -20,9 +15,22 @@
 	let loading = false;
 	let formError = '';
 
-	const turnstileRequired = Boolean(PUBLIC_TURNSTILE_SITE_KEY && PUBLIC_TURNSTILE_ENABLED === 'true');
+	const turnstileRequired = Boolean(PUBLIC_TURNSTILE_SITE_KEY);
 	let turnstileToken: string | undefined;
 	let turnstileWidget: TurnstileWidget;
+
+	// Relative -- same-origin via the proxy migration (vercel.json /
+	// vite.config.ts), a plain <a href> so this is a real full-page
+	// navigation, not a fetch call (has to be, for the OAuth redirect
+	// flow to Google and back to work at all).
+	const googleLoginUrl = '/api/customer/oauth/google/login';
+
+	const oauthErrorMessages: Record<string, string> = {
+		oauth_failed: "Google sign-in didn't work. Please try again, or sign in with your password instead.",
+		account_disabled: 'This account has been deactivated.'
+	};
+	$: oauthError = $page.url.searchParams.get('error');
+	$: oauthErrorMessage = oauthError ? (oauthErrorMessages[oauthError] ?? oauthErrorMessages.oauth_failed) : '';
 
 	onMount(() => {
 		if ($currentUser?.role === 'customer') goto('/dashboard');
@@ -70,6 +78,12 @@
 			<p class="text-muted-foreground">Sign in to follow your conversations and updates</p>
 		</div>
 
+		{#if oauthErrorMessage}
+			<p class="text-sm text-destructive text-center bg-destructive/10 rounded-lg px-4 py-3 mb-6">
+				{oauthErrorMessage}
+			</p>
+		{/if}
+
 		<div class="glass elevated rounded-2xl p-8">
 			<form on:submit|preventDefault={handleSubmit} class="space-y-5">
 				<div class="space-y-2">
@@ -82,7 +96,7 @@
 						type="email"
 						bind:value={email}
 						required
-						autocomplete="username"
+						autocomplete="email"
 						placeholder="you@example.com"
 						class="w-full h-12 px-4 rounded-lg border border-input bg-background/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-smooth"
 					/>
@@ -143,15 +157,41 @@
 				</button>
 			</form>
 
+			<div class="flex items-center gap-3 my-6">
+				<div class="flex-1 h-px bg-border" />
+				<span class="text-xs text-muted-foreground">or</span>
+				<div class="flex-1 h-px bg-border" />
+			</div>
+
+			<a
+				href={googleLoginUrl}
+				class="w-full h-12 rounded-xl border border-input bg-background/50 hover:bg-muted/60 transition-colors flex items-center justify-center gap-3 text-sm font-medium text-foreground"
+			>
+				<svg class="w-4 h-4" viewBox="0 0 24 24">
+					<path
+						fill="#4285F4"
+						d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47a5.53 5.53 0 0 1-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82z"
+					/>
+					<path
+						fill="#34A853"
+						d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.26v3.11A12 12 0 0 0 12 24z"
+					/>
+					<path
+						fill="#FBBC05"
+						d="M5.27 14.28A7.2 7.2 0 0 1 4.89 12c0-.79.14-1.56.38-2.28V6.61H1.26A12 12 0 0 0 0 12c0 1.94.46 3.77 1.26 5.39l4.01-3.11z"
+					/>
+					<path
+						fill="#EA4335"
+						d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.26 6.61l4.01 3.11C6.22 6.86 8.87 4.75 12 4.75z"
+					/>
+				</svg>
+				Continue with Google
+			</a>
+
 			<p class="text-center text-sm text-muted-foreground mt-6">
 				Don't have an account?
 				<a href="/register" class="text-primary font-medium hover:underline">Create one</a>
 			</p>
 		</div>
-
-		<p class="text-center text-xs text-muted-foreground mt-6">
-			Platform team?
-			<a href="/auth" class="text-primary hover:underline">Admin sign in</a>
-		</p>
 	</div>
 </div>

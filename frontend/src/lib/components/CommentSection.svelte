@@ -1,13 +1,4 @@
 <script lang="ts">
-	// frontend/src/lib/components/CommentSection.svelte
-	// EDITED FILE — replaces: src/lib/components/CommentSection.svelte (whole-file replacement)
-	// Changed from `export let comments: CommentNode[]` (parent passed mock
-	// data in) to `export let photoId: string` (this component now fetches
-	// and posts real comments itself via commentsApi). Guest commenting is
-	// preserved -- no login required to post, matching the original mock
-	// behavior and the backend's comments router (guests just can't like
-	// photos or moderate comments, same as before).
-
 	import { MessageCircle, Send, LoaderCircle } from '@lucide/svelte';
 	import type { CommentNode } from '$lib/types';
 	import CommentItem from './CommentItem.svelte';

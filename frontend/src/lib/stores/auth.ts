@@ -1,11 +1,3 @@
-// frontend/src/lib/stores/auth.ts
-// EDITED FILE — replaces: src/lib/stores/auth.ts (whole-file replacement)
-// This round's change: registerCustomer/loginCustomer/loginAdmin now
-// accept an optional turnstileToken and pass it through to the
-// corresponding api.ts call (which already supported it -- it just had
-// nothing feeding it before now). Everything else -- notification hooks
-// from the previous round -- is unchanged.
-
 import { writable, derived, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import type { AppUser } from '$lib/types';

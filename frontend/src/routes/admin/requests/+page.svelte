@@ -1,10 +1,4 @@
 <script lang="ts">
-	// frontend/src/routes/admin/requests/+page.svelte
-	// EDITED FILE — replaces: src/routes/admin/requests/+page.svelte (whole-file replacement)
-	// Replaced the in-memory `[...mockConversations]` copy with GET
-	// /api/conversations (requests:respond). send()/resolve() now call the
-	// real reply/status endpoints instead of mutating local state directly.
-
 	import { onMount } from 'svelte';
 	import { Mail, Send, CircleCheckBig, LoaderCircle } from '@lucide/svelte';
 	import { conversationsApi, ApiError, type ApiConversation } from '$lib/api';

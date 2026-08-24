@@ -29,7 +29,7 @@
 			<div class="md:col-span-2">
 				<a href="/" class="text-xl font-bold text-gradient inline-block mb-3">EddyArt Gallery</a>
 				<p class="text-sm text-muted-foreground max-w-sm mb-6">
-					A curated gallery of cutting-edge products — discover, explore, and share visuals that
+					A curated gallery of cutting-edge products — discover, license, and share visuals that
 					bring your ideas to life.
 				</p>
 				<div class="flex items-center gap-2">
@@ -105,9 +105,6 @@
 							hello@eddyartgallery.app
 						</a>
 					</li>
-					
-					
-					
 				</ul>
 			</div>
 		</div>
@@ -116,25 +113,17 @@
 			class="mt-12 pt-6 border-t border-border/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground"
 		>
 			<p>&copy; {year} EddyArt Gallery. All rights reserved.</p>
-			<!-- <p>
-				Ready to transform your idea ito something amzing? 
+			<p>
+				Developed by
 				<a
-					href="mailto:mapida25@gmail.com"
+					href="https://github.com"
+					target="_blank"
+					rel="noopener noreferrer"
 					class="text-primary hover:underline"
 				>
-					Mail the developer.
-					</a>
-			</p> -->
-
-			<p class="text-base text-slate-300">
-    Ready to bring your vision to life? 
-    <a
-        href="mailto:mapida25@gmail.com"
-        class="font-semibold text-primary hover:underline hover:text-primary-dark transition-colors"
-    >
-        Let’s build something incredible together.
-    </a>
-</p>
+					Eddy
+				</a>
+			</p>
 		</div>
 	</div>
 </footer>

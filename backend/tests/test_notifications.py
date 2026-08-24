@@ -1,6 +1,3 @@
-# backend/tests/test_notifications.py
-# NEW FILE — place at: tests/test_notifications.py
-
 """
 Notifications end to end, including the two real trigger points: a reply
 to a comment notifies the parent's author (unless it's a guest parent or
@@ -106,17 +103,14 @@ async def test_comment_reply_notifies_parent_author(client, published_photo, len
 
 
 async def test_no_self_notification_or_guest_notification(client, published_photo, lena):
-    # Guest posts the root comment (no account -- nobody to notify even if
-    # someone replies to it).
     resp = await client.post(f"/api/photos/{published_photo.id}/comments", json={"text": "guest comment"})
     root_id = resp.json()["id"]
 
     await _login(client, "lena@example.com", "customer-pass-1")
     await client.post(f"/api/photos/{published_photo.id}/comments", json={"text": "reply", "parent_id": root_id})
     resp = await client.get("/api/notifications")
-    assert resp.json() == []  # nobody to notify -- parent was a guest
+    assert resp.json() == []
 
-    # Now Lena replies to her own comment -- still no self-notification.
     resp = await client.post(f"/api/photos/{published_photo.id}/comments", json={"text": "my own comment"})
     my_comment_id = resp.json()["id"]
     await client.post(f"/api/photos/{published_photo.id}/comments", json={"text": "replying to myself", "parent_id": my_comment_id})
@@ -201,7 +195,7 @@ async def test_customer_cannot_see_or_mark_another_customers_notification(client
 
     await _login(client, "omar@example.com", "customer-pass-2")
     resp = await client.get("/api/notifications")
-    assert resp.json() == []  # Omar has none of his own
+    assert resp.json() == []
 
     resp = await client.post(f"/api/notifications/{notification_id}/read")
-    assert resp.status_code == 404  # can't mark Lena's notification read
+    assert resp.status_code == 404

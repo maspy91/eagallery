@@ -31,6 +31,15 @@ class User(Base):
     role = Column(String(20), nullable=False, default="customer", index=True)
     email_verified = Column(Boolean, nullable=False, default=False)
     is_active = Column(Boolean, nullable=False, default=True)
+    # Google's stable per-account id ("sub" claim), set only for accounts
+    # that have signed in with Google at least once. Nullable + unique
+    # (not a second primary key) -- most rows will never have one, and a
+    # password-based account can pick one up later by signing in with
+    # Google using the same email (see app/routers/customer_auth.py's
+    # google_oauth_callback -- that's an account *link*, not a merge; the
+    # original password keeps working too). Customer-only in practice:
+    # admin/staff accounts are never matched by the OAuth callback.
+    google_id = Column(String(255), unique=True, nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

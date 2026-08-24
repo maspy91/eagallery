@@ -1,14 +1,11 @@
-# backend/tests/test_conversations.py
-# NEW FILE — place at: tests/test_conversations.py
-
 """
 Conversations end to end: customer starts a thread -> admin sees it in the
 cross-customer list -> admin replies (status auto-flips new -> in_progress)
 -> customer sees the reply in their own list -> customer replies back ->
 admin marks resolved -> permission boundaries (customer can't list
-everyone's conversations or reply to someone else's; staff without
-requests:respond -- there isn't one by default, both admin and staff have
-it, so this also checks a *customer* can't use the admin endpoints).
+everyone's conversations or reply to someone else's; both admin and staff
+have requests:respond by default, so this also checks a *customer* can't
+use the admin endpoints).
 """
 
 import pytest
@@ -151,9 +148,6 @@ async def test_conversation_not_found(client, admin_user):
 
 
 async def test_staff_has_same_access_as_admin(client, admin_user, customer_user):
-    # Bootstrap a staff account directly (mirrors the pattern in
-    # test_admin_auth.py -- staff invite/accept is exercised there, not
-    # re-tested here).
     staff = await _create_user(
         email="jordan@example.com", name="Jordan Blake",
         password_hash=hash_password("staff-pass-1"),

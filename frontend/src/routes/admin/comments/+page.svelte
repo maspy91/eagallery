@@ -1,11 +1,4 @@
 <script lang="ts">
-	// frontend/src/routes/admin/comments/+page.svelte
-	// EDITED FILE — replaces: src/routes/admin/comments/+page.svelte (whole-file replacement)
-	// Replaced the mock-data flatten() of mockComments/galleryItems with a
-	// real fetch from GET /api/comments (comments:moderate only, already
-	// flat/cross-photo server-side -- no client-side tree-walking needed
-	// anymore). Flag/delete now call the real moderation endpoints.
-
 	import { onMount } from 'svelte';
 	import { Flag, Trash2, CircleCheckBig, LoaderCircle } from '@lucide/svelte';
 	import { commentsApi, ApiError, type ApiAdminComment } from '$lib/api';

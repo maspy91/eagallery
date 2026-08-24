@@ -1,5 +1,3 @@
-# backend/alembic/versions/0005_notifications.py
-# NEW FILE — place at: alembic/versions/0005_notifications.py
 """notifications
 
 Revision ID: 0005
@@ -22,12 +20,7 @@ def upgrade() -> None:
     op.create_table(
         "notifications",
         sa.Column("id", sa.String(length=36), primary_key=True),
-        sa.Column(
-            "user_id",
-            sa.String(length=36),
-            sa.ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
+        sa.Column("user_id", sa.String(length=36), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("type", sa.String(length=30), nullable=False),
         sa.Column("message", sa.String(length=500), nullable=False),
         sa.Column("href", sa.String(length=500), nullable=False),

@@ -1,8 +1,3 @@
-# backend/app/models/photo.py
-# EDITED FILE — replaces: app/models/photo.py (whole-file replacement)
-# Only change: added PhotoView below PhotoLike. Photo/PhotoLike are
-# unchanged.
-
 import uuid
 
 from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
@@ -57,22 +52,20 @@ class PhotoLike(Base):
 
 
 class PhotoView(Base):
-    """One row per (photo, viewer) -- existence means that viewer has
-    already been counted, so Photo.view_count only ever goes up once per
-    distinct visitor, not once per page load/refresh.
-
-    viewer_key is 'customer:<user_id>' for a logged-in customer, or
-    'ip:<address>' for a guest -- there's no login to key off for an
-    anonymous visitor, so IP is the standard (if imperfect -- shared
-    IPs/NAT under-count distinct people, a VPN or dynamic IP can
-    over-count) fallback identity. No foreign key to users on this
-    column since it has to hold either shape.
-    """
+    """One row per distinct viewer per photo -- existence means "already
+    counted", the same pattern as PhotoLike. viewer_key is either
+    `customer:<user_id>` for a logged-in customer or `ip:<address>` for a
+    guest (no stable identity otherwise) -- prefixed so the two
+    namespaces can never collide. Guest dedup by IP is an imperfect
+    fallback (shared NAT/office networks share a view, a VPN or dynamic
+    IP can inflate it) but it's strictly better than the unconditional
+    per-request increment this replaced, which counted every single page
+    load/refresh as a new view for everyone."""
 
     __tablename__ = "photo_views"
     __table_args__ = (UniqueConstraint("photo_id", "viewer_key", name="uq_photo_views_photo_viewer"),)
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
     photo_id = Column(String(36), ForeignKey("photos.id", ondelete="CASCADE"), nullable=False, index=True)
-    viewer_key = Column(String(200), nullable=False, index=True)
+    viewer_key = Column(String(255), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

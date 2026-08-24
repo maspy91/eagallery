@@ -1,10 +1,4 @@
 <script lang="ts">
-	// frontend/src/routes/dashboard/inbox/+page.svelte
-	// EDITED FILE — replaces: src/routes/dashboard/inbox/+page.svelte (whole-file replacement)
-	// Replaced mockConversations (filtered client-side by customerId) with
-	// GET /api/conversations/mine. sendNew/sendReply now call the real
-	// create/reply endpoints instead of mutating the mock array in place.
-
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { Send, Plus, MessagesSquare, LoaderCircle } from '@lucide/svelte';
