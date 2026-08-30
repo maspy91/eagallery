@@ -10,6 +10,7 @@ when Google OAuth simply isn't configured.
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import select
 
 from app.core.security import hash_password
 from app.models.user import User
@@ -182,3 +183,59 @@ async def test_deactivated_account_blocked_at_callback(client, google_oauth_conf
     )
     assert "error=account_disabled" in resp.headers["location"]
     assert "customer_session" not in resp.cookies
+
+
+async def test_unverified_google_email_rejected(client, google_oauth_configured, monkeypatch):
+    """Google can return email_verified=false for some federated/enterprise
+    identities. The callback must never create an account or link Google
+    onto an existing one on the strength of an unverified email -- that's
+    the entire safety argument for treating "found by email" as safe to
+    auto-link (see the comment in customer_auth.py), so it has to actually
+    be checked, not just assumed."""
+    import app.routers.customer_auth as customer_auth_module
+
+    async def _fake_exchange(code: str) -> dict:
+        return {"access_token": "fake-access-token"}
+
+    async def _fake_userinfo_unverified(access_token: str) -> dict:
+        return {
+            "sub": "google-sub-unverified",
+            "email": "victim@example.com",
+            "name": "Attacker Controlled Name",
+            "email_verified": False,
+        }
+
+    monkeypatch.setattr(customer_auth_module, "exchange_code_for_tokens", _fake_exchange)
+    monkeypatch.setattr(customer_auth_module, "fetch_google_userinfo", _fake_userinfo_unverified)
+
+    # Case 1: no existing account with this email -- must not create one.
+    client.cookies.set("oauth_state", "state-1")
+    resp = await client.get(
+        "/api/customer/oauth/google/callback", params={"code": "valid-code", "state": "state-1"}, follow_redirects=False
+    )
+    assert "error=oauth_failed" in resp.headers["location"]
+    assert "customer_session" not in resp.cookies
+
+    async with TestSessionLocal() as db:
+        result = await db.execute(select(User).where(User.email == "victim@example.com"))
+        assert result.scalar_one_or_none() is None
+
+    # Case 2: an existing password account with this email -- must not get
+    # Google silently linked onto it (that would be a new, attacker-known
+    # way into someone else's account).
+    victim = await _create_user(
+        email="victim@example.com", name="Victim",
+        password_hash=hash_password("victims-real-password-1"),
+        role="customer", email_verified=True, is_active=True,
+    )
+
+    client.cookies.set("oauth_state", "state-2")
+    resp = await client.get(
+        "/api/customer/oauth/google/callback", params={"code": "valid-code", "state": "state-2"}, follow_redirects=False
+    )
+    assert "error=oauth_failed" in resp.headers["location"]
+    assert "customer_session" not in resp.cookies
+
+    async with TestSessionLocal() as db:
+        refreshed = await db.get(User, victim.id)
+        assert refreshed.google_id is None

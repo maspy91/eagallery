@@ -115,13 +115,13 @@ async def test_customer_cannot_use_admin_endpoints(client, customer_user):
     await _login_customer(client, customer_user)
 
     resp = await client.get("/api/conversations")
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
     resp = await client.post("/api/conversations", json={"subject": "x", "text": "y"})
     conv_id = resp.json()["id"]
 
     resp = await client.patch(f"/api/conversations/{conv_id}", json={"status": "resolved"})
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
 
 async def test_customer_cannot_reply_to_someone_elses_conversation(client, customer_user, other_customer):

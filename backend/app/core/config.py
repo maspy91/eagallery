@@ -94,6 +94,19 @@ class Settings(BaseSettings):
         return [origin.strip().rstrip("/") for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
 
     @model_validator(mode="after")
+    def _normalize_database_url(self):
+        """asyncpg's DSN parser doesn't understand libpq-style `sslmode=`
+        (it raises on connect) -- only `ssl=`. Neon's own dashboard hands
+        out connection strings with `?sslmode=require` though (see
+        .env.example), so normalize that one query param rather than
+        expecting every deployer to hand-edit the string Neon gave them.
+        Only touches the asyncpg driver; leaves other drivers/tests alone.
+        """
+        if "+asyncpg" in self.DATABASE_URL and "sslmode=" in self.DATABASE_URL:
+            self.DATABASE_URL = self.DATABASE_URL.replace("sslmode=", "ssl=")
+        return self
+
+    @model_validator(mode="after")
     def _validate_turnstile(self):
         if self.TURNSTILE_ENABLED and not self.TURNSTILE_SECRET:
             raise ValueError(

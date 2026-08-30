@@ -33,7 +33,10 @@
 		}
 	}
 
-	$: load(id);
+	// `id` is typed string | undefined (Svelte hoists $: declarations, so TS
+	// can't prove it's assigned before this runs) even though this route
+	// always has an :id param -- guard rather than assert, it's free.
+	$: if (id) load(id);
 
 	async function toggleLike() {
 		if (!item || likePending || !$authChecked) return;

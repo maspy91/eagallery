@@ -23,3 +23,20 @@ def expiry_from_now(**kwargs) -> datetime:
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def is_expired(expires_at: datetime, now: datetime | None = None) -> bool:
+    """expires_at < now, tolerant of naive datetimes.
+
+    Postgres (production, via asyncpg) always returns tz-aware datetimes
+    for a DateTime(timezone=True) column. SQLite (used by the test suite)
+    has no native timezone support and silently hands back a naive
+    datetime instead, which makes a bare `<` comparison raise
+    TypeError: can't compare offset-naive and offset-aware datetimes.
+    Treat a naive value as UTC (everything in this app is stored/compared
+    in UTC) so the check behaves the same on both backends.
+    """
+    now = now or utcnow()
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at < now

@@ -1,15 +1,48 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { Images, Eye, Heart, Mail, MessageSquareWarning } from '@lucide/svelte';
-	import { galleryItems, mockConversations, mockComments } from '$lib/data/mock';
+	import { photosApi, conversationsApi, commentsApi, type ApiPhoto, type ApiConversation, type ApiAdminComment } from '$lib/api';
 
-	$: totalViews = galleryItems.reduce((s, i) => s + i.viewCount, 0);
-	$: totalLikes = galleryItems.reduce((s, i) => s + i.likeCount, 0);
-	$: flaggedCount = galleryItems.filter((i) => i.status === 'flagged').length;
-	$: newRequests = mockConversations.filter((c) => c.status !== 'resolved').length;
-	$: totalComments = Object.values(mockComments).flat().length;
+	// Was reading galleryItems/mockConversations/mockComments from
+	// $lib/data/mock -- static demo data completely disconnected from
+	// the real backend, so every stat here was frozen regardless of what
+	// was actually happening on the platform. Wired to the same
+	// admin-facing endpoints the Photos/Requests/Comments admin pages
+	// already use.
+	//
+	// Note: photosApi.list() and commentsApi.listAll() aren't paginated
+	// beyond a single page (list() caps at 100 rows; listAll() has no
+	// limit param at all), so these stats are exact only up to that
+	// backend-side cap -- a real analytics endpoint would be needed for
+	// an exact count on a gallery with 100+ photos.
+	let photos: ApiPhoto[] = [];
+	let conversations: ApiConversation[] = [];
+	let comments: ApiAdminComment[] = [];
+	let loading = true;
+
+	onMount(async () => {
+		try {
+			[photos, conversations, comments] = await Promise.all([
+				photosApi.list({ limit: 100 }),
+				conversationsApi.listAll(),
+				commentsApi.listAll()
+			]);
+		} catch {
+			// leave whatever loaded -- stat cards below just show 0 for
+			// whichever call failed rather than blocking the whole page
+		} finally {
+			loading = false;
+		}
+	});
+
+	$: totalViews = photos.reduce((s, i) => s + i.viewCount, 0);
+	$: totalLikes = photos.reduce((s, i) => s + i.likeCount, 0);
+	$: flaggedCount = photos.filter((i) => i.status === 'flagged').length;
+	$: newRequests = conversations.filter((c) => c.status !== 'resolved').length;
+	$: totalComments = comments.length;
 
 	$: stats = [
-		{ label: 'Published photos', value: galleryItems.filter((i) => i.status === 'published').length, icon: Images },
+		{ label: 'Published photos', value: photos.filter((i) => i.status === 'published').length, icon: Images },
 		{ label: 'Total views', value: totalViews.toLocaleString(), icon: Eye },
 		{ label: 'Total likes', value: totalLikes.toLocaleString(), icon: Heart },
 		{ label: 'Open requests', value: newRequests, icon: Mail },

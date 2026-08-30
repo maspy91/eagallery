@@ -25,5 +25,8 @@
   "dependencies": {
     "@lucide/svelte": "^1.26.0",
     "zod": "^4.0.0"
+  },
+  "overrides": {
+    "cookie": "^0.7.2"
   }
 }

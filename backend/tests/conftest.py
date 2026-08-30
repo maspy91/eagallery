@@ -5,9 +5,17 @@ import os
 # per-environment values come from .env / Render env vars outside tests.
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://user:password@localhost/test")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest-only")
+# 32+ bytes to avoid PyJWT's InsecureKeyLengthWarning on every token
+# encode/decode in the test run (HS256 wants >= 32 bytes; the old
+# 31-byte value was under that).
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest-only-32b")
 os.environ.setdefault("DEBUG", "True")
 os.environ.setdefault("TURNSTILE_ENABLED", "False")
+# Settings.FRONTEND_URL has no default (required in every real
+# environment -- see app/core/config.py) so it must be set here too, or
+# Settings() raises ValidationError before a single test can even be
+# collected.
+os.environ.setdefault("FRONTEND_URL", "http://localhost:5173")
 
 import pytest
 import pytest_asyncio

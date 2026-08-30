@@ -1,22 +1,22 @@
 <script lang="ts">
 	// "Unread notifications" reads the real notifications store.
 	// "Open conversations" fetches real data via conversationsApi.listMine().
-	// "Post threads you're in" is UNCHANGED and still reads mockComments --
-	// that's the separate dashboard/conversations comment-thread feature.
+	// "Post threads you're in" fetches real data too now -- see the
+	// onMount comment below for how, and why it isn't a single API call.
 
 	import { onMount } from 'svelte';
 	import { Bell, Inbox, MessagesSquare, Plus } from '@lucide/svelte';
 	import { currentUser } from '$lib/stores/auth';
 	import { notifications } from '$lib/stores/notifications';
-	import { mockComments, galleryItems } from '$lib/data/mock';
-	import { conversationsApi, type ApiConversation } from '$lib/api';
-	import type { CommentNode } from '$lib/types';
+	import { galleryItems } from '$lib/data/mock';
+	import { conversationsApi, photosApi, commentsApi, type ApiConversation } from '$lib/api';
 
 	$: myId = $currentUser?.id;
 
 	$: unreadNotifications = $notifications.filter((n) => !n.read);
 
 	let openConversations = 0;
+	let myThreadCount = 0;
 	onMount(async () => {
 		try {
 			const mine: ApiConversation[] = await conversationsApi.listMine();
@@ -24,22 +24,34 @@
 		} catch {
 			// leave at 0 -- not worth surfacing an error for a dashboard stat card
 		}
-	});
 
-	function countMyThreads(): number {
-		let count = 0;
-		for (const nodes of Object.values(mockComments)) {
-			const walk = (list: CommentNode[]) => {
-				for (const c of list) {
+		// Was reading mockComments (static demo data) and counting authorId
+		// matches recursively through every reply -- disconnected from any
+		// real customer's actual comments. Same "no single endpoint for a
+		// customer's own comments" constraint as dashboard/conversations,
+		// so this fetches each published photo's comment tree and counts
+		// matches (root comments and replies alike, matching the original
+		// recursive-walk semantics). Bounded by photosApi.list()'s 100-row
+		// cap.
+		if (!myId) return;
+		try {
+			const photos = await photosApi.list({ status: 'published', limit: 100 });
+			const commentLists = await Promise.all(
+				photos.map((p) => commentsApi.list(p.id).catch(() => []))
+			);
+			let count = 0;
+			const walk = (nodes: { authorId: string | null; replies: unknown[] }[]) => {
+				for (const c of nodes as { authorId: string | null; replies: typeof nodes }[]) {
 					if (c.authorId === myId) count++;
-					if (c.replies.length) walk(c.replies);
+					if (c.replies.length) walk(c.replies as typeof nodes);
 				}
 			};
-			walk(nodes);
+			for (const list of commentLists) walk(list);
+			myThreadCount = count;
+		} catch {
+			// leave at 0, same reasoning as the conversations count above
 		}
-		return count;
-	}
-	$: myThreadCount = countMyThreads();
+	});
 </script>
 
 <svelte:head><title>Dashboard — EddyArt Gallery</title></svelte:head>

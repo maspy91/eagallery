@@ -125,13 +125,13 @@ async def test_customer_cannot_moderate(client, published_photo, customer_user):
     await _login_customer(client, customer_user)
 
     resp = await client.get("/api/comments")
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
     resp = await client.patch(f"/api/comments/{comment_id}", json={"flagged": True})
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
     resp = await client.delete(f"/api/comments/{comment_id}")
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
 
 async def test_admin_flag_and_flat_cross_photo_list(client, published_photo, admin_user):

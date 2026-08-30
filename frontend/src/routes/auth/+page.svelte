@@ -7,10 +7,15 @@
 	import { ApiError } from '$lib/api';
 	import { PUBLIC_TURNSTILE_SITE_KEY } from '$env/static/public';
 	import TurnstileWidget from '$lib/components/TurnstileWidget.svelte';
+	import { emailSchema, loginPasswordSchema } from '$lib/validation';
 
+	// Was its own inline z.object() requiring password.min(8) -- see the
+	// comment on loginPasswordSchema in validation.ts for why login must
+	// not enforce that (it nearly-uniquely matters here: ADMIN_PASSWORD is
+	// unvalidated server-side, and this page is the only way into /admin).
 	const authSchema = z.object({
-		email: z.string().email('Invalid email address').max(255),
-		password: z.string().min(8, 'Password must be at least 8 characters').max(100)
+		email: emailSchema,
+		password: loginPasswordSchema
 	});
 
 	let email = '';
@@ -31,7 +36,7 @@
 		formError = '';
 		const parsed = authSchema.safeParse({ email, password });
 		if (!parsed.success) {
-			formError = parsed.error.errors[0].message;
+			formError = parsed.error.issues[0].message;
 			return;
 		}
 		if (turnstileRequired && !turnstileToken) {

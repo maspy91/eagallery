@@ -128,6 +128,12 @@ export interface PhotoListParams {
 	limit?: number;
 }
 
+// Called with a spread copy of the params object at the call site
+// (`buildQuery({ ...params })`), not the named PhotoListParams interface
+// directly -- TS's structural check against Record<string, ...> requires
+// an index signature for a *named* interface type, but not for a fresh
+// object literal with the same shape, so spreading sidesteps needing to
+// add an index signature to PhotoListParams itself.
 function buildQuery(params: Record<string, string | number | undefined>): string {
 	const usp = new URLSearchParams();
 	for (const [key, value] of Object.entries(params)) {
@@ -138,7 +144,7 @@ function buildQuery(params: Record<string, string | number | undefined>): string
 }
 
 export const photosApi = {
-	list: (params: PhotoListParams = {}) => get<ApiPhoto[]>(`/api/photos${buildQuery(params)}`),
+	list: (params: PhotoListParams = {}) => get<ApiPhoto[]>(`/api/photos${buildQuery({ ...params })}`),
 	get: (id: string) => get<ApiPhoto>(`/api/photos/${id}`),
 	getUploadUrl: (filename: string, contentType: string) =>
 		post<{ objectKey: string; uploadUrl: string; publicUrl: string }>('/api/photos/upload-url', {

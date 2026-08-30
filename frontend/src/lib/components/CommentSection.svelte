@@ -3,9 +3,26 @@
 	import type { CommentNode } from '$lib/types';
 	import CommentItem from './CommentItem.svelte';
 	import { currentUser } from '$lib/stores/auth';
-	import { commentsApi, ApiError } from '$lib/api';
+	import { commentsApi, ApiError, type ApiComment } from '$lib/api';
 
 	export let photoId: string;
+
+	// ApiComment.authorId is string | null (mirrors the backend's Optional
+	// column); CommentNode.authorId is string | undefined (the app-wide
+	// convention -- see types.ts, and how CommentItem compares it against
+	// currentUser). Normalize at this boundary rather than changing
+	// CommentNode, which is also used with mock/demo data elsewhere.
+	function toCommentNode(c: ApiComment): CommentNode {
+		return {
+			id: c.id,
+			author: c.author,
+			authorId: c.authorId ?? undefined,
+			text: c.text,
+			timestamp: c.timestamp,
+			flagged: c.flagged,
+			replies: c.replies.map(toCommentNode)
+		};
+	}
 
 	let comments: CommentNode[] = [];
 	let loading = true;
@@ -19,7 +36,7 @@
 		loading = true;
 		loadError = '';
 		try {
-			comments = await commentsApi.list(id);
+			comments = (await commentsApi.list(id)).map(toCommentNode);
 		} catch (err) {
 			loadError = err instanceof ApiError ? err.message : 'Could not load comments.';
 		} finally {
@@ -48,7 +65,7 @@
 		submitting = true;
 		try {
 			const created = await commentsApi.create(photoId, trimmed);
-			comments = [created, ...comments];
+			comments = [toCommentNode(created), ...comments];
 			newComment = '';
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Could not post your comment. Please try again.';
@@ -60,9 +77,10 @@
 	async function addReply(commentId: string, text: string) {
 		try {
 			const reply = await commentsApi.create(photoId, text, commentId);
+			const replyNode = toCommentNode(reply);
 			function walk(nodes: CommentNode[]): CommentNode[] {
 				return nodes.map((c) => {
-					if (c.id === commentId) return { ...c, replies: [...c.replies, reply] };
+					if (c.id === commentId) return { ...c, replies: [...c.replies, replyNode] };
 					if (c.replies.length > 0) return { ...c, replies: walk(c.replies) };
 					return c;
 				});

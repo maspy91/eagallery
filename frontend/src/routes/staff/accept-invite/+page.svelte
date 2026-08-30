@@ -18,7 +18,7 @@
 		formError = '';
 		const parsed = resetPasswordSchema.safeParse({ password, confirmPassword });
 		if (!parsed.success) {
-			formError = parsed.error.errors[0].message;
+			formError = parsed.error.issues[0].message;
 			return;
 		}
 		if (!token) return;

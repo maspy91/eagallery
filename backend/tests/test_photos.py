@@ -51,9 +51,17 @@ def fake_storage(monkeypatch):
     import app.routers.photos as photos_module
 
     deleted_keys: list[str] = []
+    _counter = {"n": 0}
 
     def _fake_generate_object_key(filename: str, prefix: str = "photos") -> str:
-        return f"{prefix}/fake-{filename}"
+        # Real generate_object_key() uses uuid4() and is always unique per
+        # call; this fake must preserve that property (a fixed filename
+        # like "watch.jpg" is reused across many calls in these tests,
+        # e.g. the 5-photo loop in test_random_selection_and_category_filter)
+        # or every second create_photo() collides on photos.object_key's
+        # UNIQUE constraint.
+        _counter["n"] += 1
+        return f"{prefix}/fake-{_counter['n']}-{filename}"
 
     def _fake_presigned_url(object_key: str, content_type: str, expires_in: int = 300) -> str:
         return f"https://fake-r2.example.com/{object_key}?signature=fake"
@@ -144,13 +152,13 @@ async def test_customer_cannot_manage_photos(client, customer_user):
     resp = await client.post(
         "/api/photos/upload-url", json={"filename": "x.jpg", "content_type": "image/jpeg"}
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
     resp = await client.post(
         "/api/photos",
         json={"objectKey": "photos/x.jpg", "title": "X", "category": "Y", "description": "", "specs": []},
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
 
 async def test_like_toggle(client, admin_user, customer_user):

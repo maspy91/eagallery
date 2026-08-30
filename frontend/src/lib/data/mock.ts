@@ -360,7 +360,7 @@ export const mockConversations: BusinessConversation[] = [
 
 export const mockNotifications: AppNotification[] = [
 	{
-		id: 1,
+		id: 'n1',
 		userId: 'c1',
 		type: 'comment_reply',
 		message: 'Jordan Blake replied to your comment on SmartWatch Pro',
@@ -369,7 +369,7 @@ export const mockNotifications: AppNotification[] = [
 		timestamp: '2026-07-22T09:10:00Z'
 	},
 	{
-		id: 2,
+		id: 'n2',
 		userId: 'c1',
 		type: 'conversation_reply',
 		message: 'Admin replied to your licensing inquiry',
@@ -378,7 +378,7 @@ export const mockNotifications: AppNotification[] = [
 		timestamp: '2026-07-21T16:40:00Z'
 	},
 	{
-		id: 3,
+		id: 'n3',
 		userId: 'c1',
 		type: 'system',
 		message: 'Welcome to EddyArt Gallery — complete your profile to get started.',

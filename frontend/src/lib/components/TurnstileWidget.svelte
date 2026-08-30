@@ -24,17 +24,9 @@
 	let container: HTMLDivElement;
 	let widgetId: string | null = null;
 
-	interface TurnstileGlobal {
-		render: (container: HTMLElement, options: Record<string, unknown>) => string;
-		remove: (id: string) => void;
-		reset: (id: string) => void;
-	}
-	declare global {
-		interface Window {
-			turnstile?: TurnstileGlobal;
-			__onTurnstileLoad?: () => void;
-		}
-	}
+	// Window.turnstile / Window.__onTurnstileLoad are declared globally in
+	// src/app.d.ts -- see the comment there for why that has to be a
+	// separate .d.ts file rather than a `declare global` here.
 
 	function loadScript(): Promise<void> {
 		return new Promise((resolve) => {

@@ -14,7 +14,7 @@ from app.core.oauth_google import build_authorization_url, exchange_code_for_tok
 from app.core.rate_limit import check_and_increment
 from app.core.security import create_access_token, hash_password, verify_password
 from app.core.security_log import log_security_event
-from app.core.tokens import expiry_from_now, generate_raw_token, hash_token, utcnow
+from app.core.tokens import expiry_from_now, generate_raw_token, hash_token, is_expired, utcnow
 from app.core.turnstile import verify_turnstile_token
 from app.models.auth_token import AuthToken
 from app.models.user import User
@@ -122,7 +122,7 @@ async def verify_email(
     auth_token = result.scalar_one_or_none()
     now = utcnow()
 
-    if not auth_token or auth_token.used_at is not None or auth_token.expires_at < now:
+    if not auth_token or auth_token.used_at is not None or is_expired(auth_token.expires_at, now):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "This verification link is invalid or has expired.")
 
     result = await db.execute(select(User).where(User.id == auth_token.user_id))
@@ -288,6 +288,15 @@ async def google_oauth_callback(request: Request, db: AsyncSession = Depends(get
     name = (userinfo.get("name") or "").strip() or (email.split("@")[0] if email else "Google User")
 
     if not google_id or not email:
+        return RedirectResponse(f"{frontend_url}/login?error=oauth_failed")
+
+    # Google can return email_verified=false for some federated/enterprise
+    # identities. Everything below -- creating a verified account, or
+    # linking Google as a second way into an existing password account --
+    # is only safe *because* Google has verified this address; without this
+    # check, an attacker with an unverified Google email matching someone
+    # else's address could take over that person's account.
+    if userinfo.get("email_verified") is not True:
         return RedirectResponse(f"{frontend_url}/login?error=oauth_failed")
 
     # 1. Already linked to this Google account -- straightforward login.

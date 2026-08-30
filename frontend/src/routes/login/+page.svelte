@@ -40,7 +40,7 @@
 		formError = '';
 		const parsed = loginSchema.safeParse({ email, password });
 		if (!parsed.success) {
-			formError = parsed.error.errors[0].message;
+			formError = parsed.error.issues[0].message;
 			return;
 		}
 		if (turnstileRequired && !turnstileToken) {

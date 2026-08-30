@@ -21,6 +21,13 @@
 	let editError = '';
 
 	let deletingId: string | null = null;
+	// Delete has no undo (it also removes the object from storage -- see
+	// the DELETE /api/photos/{id} handler), and there was previously no
+	// confirmation at all: one misclick permanently destroyed a photo.
+	// Two-step inline confirm instead of window.confirm() -- blocking
+	// dialogs are jarring and this matches the app's existing style
+	// better than introducing a new modal just for this.
+	let confirmingId: string | null = null;
 
 	const statusStyle: Record<ApiPhoto['status'], string> = {
 		published: 'bg-success/10 text-success',
@@ -96,6 +103,7 @@
 		editSpecs = item.specs.join(', ');
 		editStatus = item.status;
 		editError = '';
+		confirmingId = null; // clear a stale pending-delete confirm on this row, if any
 	}
 
 	function cancelEdit() {
@@ -128,6 +136,7 @@
 
 	async function remove(id: string) {
 		deletingId = id;
+		confirmingId = null;
 		try {
 			await photosApi.remove(id);
 			items = items.filter((i) => i.id !== id);
@@ -136,6 +145,14 @@
 		} finally {
 			deletingId = null;
 		}
+	}
+
+	function requestDelete(id: string) {
+		confirmingId = id;
+	}
+
+	function cancelDelete() {
+		confirmingId = null;
 	}
 </script>
 
@@ -227,18 +244,36 @@
 									>
 										<Pencil class="w-4 h-4 text-muted-foreground" />
 									</button>
-									<button
-										on:click={() => remove(item.id)}
-										disabled={deletingId === item.id}
-										class="p-2 rounded-md hover:bg-destructive/10 transition-colors disabled:opacity-50"
-										aria-label="Delete {item.title}"
-									>
-										{#if deletingId === item.id}
-											<LoaderCircle class="w-4 h-4 text-destructive animate-spin" />
-										{:else}
+									{#if confirmingId === item.id}
+										<button
+											on:click={() => remove(item.id)}
+											disabled={deletingId === item.id}
+											class="px-2 py-1.5 rounded-md bg-destructive text-destructive-foreground text-xs font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50 flex items-center gap-1"
+											aria-label="Confirm delete {item.title}"
+										>
+											{#if deletingId === item.id}
+												<LoaderCircle class="w-3.5 h-3.5 animate-spin" />
+											{:else}
+												Confirm
+											{/if}
+										</button>
+										<button
+											on:click={cancelDelete}
+											disabled={deletingId === item.id}
+											class="p-2 rounded-md hover:bg-muted transition-colors disabled:opacity-50"
+											aria-label="Cancel delete"
+										>
+											<X class="w-4 h-4 text-muted-foreground" />
+										</button>
+									{:else}
+										<button
+											on:click={() => requestDelete(item.id)}
+											class="p-2 rounded-md hover:bg-destructive/10 transition-colors"
+											aria-label="Delete {item.title}"
+										>
 											<Trash2 class="w-4 h-4 text-destructive" />
-										{/if}
-									</button>
+										</button>
+									{/if}
 								</div>
 							</td>
 						</tr>
