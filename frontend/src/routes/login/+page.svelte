@@ -23,7 +23,7 @@
 	// vite.config.ts), a plain <a href> so this is a real full-page
 	// navigation, not a fetch call (has to be, for the OAuth redirect
 	// flow to Google and back to work at all).
-	const googleLoginUrl = '/api/customer/oauth/google/login';
+	const googleLoginUrl = `/api/customer/oauth/google/login`;
 
 	const oauthErrorMessages: Record<string, string> = {
 		oauth_failed: "Google sign-in didn't work. Please try again, or sign in with your password instead.",
