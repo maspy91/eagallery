@@ -9,22 +9,30 @@ from app.core.notifications import create_notification
 from app.core.rate_limit import check_and_increment
 from app.models.comment import Comment
 from app.models.photo import Photo
+from app.models.video import Video
 from app.models.user import User
 from app.schemas.comments import AdminCommentOut, CommentCreateRequest, CommentOut, MessageResponse, ModerateCommentRequest
 
-# Two routers, same file: one nested under /api/photos/{photo_id}/comments
-# (public read + create, scoped to one photo -- mirrors the tree shape the
-# frontend already renders), one at /api/comments (moderation, cross-photo,
-# flat -- mirrors the admin "Comments" page, which lists every comment in
-# the gallery regardless of which photo it's on).
+# Three routers, same file: one nested under /api/photos/{photo_id}/comments
+# and one under /api/videos/{video_id}/comments (public read + create, each
+# scoped to one media item -- mirrors the tree shape the frontend already
+# renders for either), one at /api/comments (moderation, cross-media, flat --
+# mirrors the admin "Comments" page, which lists every comment in the
+# gallery regardless of which photo/video it's on). The photo and video
+# routers share the same handler bodies via the _comments_for_media helpers
+# below rather than being copy-pasted, so a future change to rate limiting,
+# tree-building, or notify-on-reply only has to happen once.
 photo_comments_router = APIRouter(prefix="/api/photos", tags=["comments"])
+video_comments_router = APIRouter(prefix="/api/videos", tags=["comments"])
 moderation_router = APIRouter(prefix="/api/comments", tags=["comments"])
 
 # Self-contained rate limit for comment posting -- deliberately not reusing
 # RATE_LIMIT_REGISTER_* from settings (registration and commenting have very
 # different natural rates; a genuinely engaged commenter can easily exceed
 # a register-sized limit). Kept as local constants rather than new Settings
-# fields to avoid touching config.py/.env for this feature.
+# fields to avoid touching config.py/.env for this feature. Shared by both
+# photo and video comments -- one combined budget per IP, not double the
+# effective rate via two separate buckets.
 COMMENT_RATE_LIMIT_MAX_ATTEMPTS = 10
 COMMENT_RATE_LIMIT_WINDOW_SECONDS = 600  # 10 minutes
 
@@ -49,11 +57,12 @@ def _build_tree(comments: list[Comment]) -> list[CommentOut]:
 
 
 async def _collect_descendant_ids(db: AsyncSession, comment_id: str) -> list[str]:
-    """All comments in a photo are a small, bounded set (unlike, say,
-    photos or users), so a few extra round trips here to recursively
-    gather reply ids before deleting is simpler and more portable across
-    SQLite (tests) and Postgres (prod) than relying on FK cascade
-    behavior, which SQLite doesn't enforce without an extra PRAGMA."""
+    """All comments on one photo/video are a small, bounded set (unlike,
+    say, photos or users), so a few extra round trips here to
+    recursively gather reply ids before deleting is simpler and more
+    portable across SQLite (tests) and Postgres (prod) than relying on
+    FK cascade behavior, which SQLite doesn't enforce without an extra
+    PRAGMA."""
     ids = [comment_id]
     frontier = [comment_id]
     while frontier:
@@ -64,29 +73,24 @@ async def _collect_descendant_ids(db: AsyncSession, comment_id: str) -> list[str
     return ids
 
 
-# ---- Public: read + create, scoped to one photo ----
-
-
-@photo_comments_router.get("/{photo_id}/comments", response_model=list[CommentOut])
-async def list_comments(photo_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Photo.id).where(Photo.id == photo_id, Photo.status == "published"))
-    if result.scalar_one_or_none() is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Photo not found")
-
-    result = await db.execute(
-        select(Comment).where(Comment.photo_id == photo_id).order_by(Comment.created_at.asc())
-    )
+async def _list_comments_for(db: AsyncSession, *, photo_id: str | None, video_id: str | None) -> list[CommentOut]:
+    media_col = Comment.photo_id if photo_id is not None else Comment.video_id
+    media_id = photo_id if photo_id is not None else video_id
+    result = await db.execute(select(Comment).where(media_col == media_id).order_by(Comment.created_at.asc()))
     return _build_tree(list(result.scalars().all()))
 
 
-@photo_comments_router.post("/{photo_id}/comments", response_model=CommentOut, status_code=status.HTTP_201_CREATED)
-async def create_comment(
-    photo_id: str,
-    payload: CommentCreateRequest,
+async def _create_comment_for(
+    db: AsyncSession,
     request: Request,
-    db: AsyncSession = Depends(get_db),
-    commenter: User | None = Depends(get_optional_customer),
-):
+    payload: CommentCreateRequest,
+    commenter: User | None,
+    *,
+    photo_id: str | None,
+    video_id: str | None,
+    media_title: str,
+    media_href: str,
+) -> CommentOut:
     ip = get_client_ip(request)
     allowed, retry_after = await check_and_increment(
         f"rl:comment:{ip}", COMMENT_RATE_LIMIT_MAX_ATTEMPTS, COMMENT_RATE_LIMIT_WINDOW_SECONDS
@@ -94,23 +98,19 @@ async def create_comment(
     if not allowed:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, f"Too many comments. Try again in {retry_after}s.")
 
-    result = await db.execute(
-        select(Photo.id, Photo.title).where(Photo.id == photo_id, Photo.status == "published")
-    )
-    photo_row = result.first()
-    if photo_row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Photo not found")
-    photo_title = photo_row.title
+    media_col = Comment.photo_id if photo_id is not None else Comment.video_id
+    media_id = photo_id if photo_id is not None else video_id
 
     parent: Comment | None = None
     if payload.parent_id:
-        result = await db.execute(select(Comment).where(Comment.id == payload.parent_id, Comment.photo_id == photo_id))
+        result = await db.execute(select(Comment).where(Comment.id == payload.parent_id, media_col == media_id))
         parent = result.scalar_one_or_none()
         if parent is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid parent comment")
 
     comment = Comment(
         photo_id=photo_id,
+        video_id=video_id,
         parent_id=payload.parent_id,
         author_id=commenter.id if commenter else None,
         author_name=commenter.name if commenter else "Anonymous User",
@@ -128,8 +128,8 @@ async def create_comment(
             db,
             user_id=parent.author_id,
             type="comment_reply",
-            message=f"{replier_name} replied to your comment on {photo_title}",
-            href=f"/image/{photo_id}",
+            message=f"{replier_name} replied to your comment on {media_title}",
+            href=media_href,
         )
 
     await db.commit()
@@ -138,32 +138,113 @@ async def create_comment(
     return _to_out(comment, {})
 
 
-# ---- Moderation: admin/staff, cross-photo, flat (comments:moderate) ----
+# ---- Public: read + create, scoped to one photo ----
+
+
+@photo_comments_router.get("/{photo_id}/comments", response_model=list[CommentOut])
+async def list_photo_comments(photo_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Photo.id).where(Photo.id == photo_id, Photo.status == "published"))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Photo not found")
+    return await _list_comments_for(db, photo_id=photo_id, video_id=None)
+
+
+@photo_comments_router.post("/{photo_id}/comments", response_model=CommentOut, status_code=status.HTTP_201_CREATED)
+async def create_photo_comment(
+    photo_id: str,
+    payload: CommentCreateRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    commenter: User | None = Depends(get_optional_customer),
+):
+    result = await db.execute(
+        select(Photo.id, Photo.title).where(Photo.id == photo_id, Photo.status == "published")
+    )
+    photo_row = result.first()
+    if photo_row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Photo not found")
+
+    return await _create_comment_for(
+        db, request, payload, commenter,
+        photo_id=photo_id, video_id=None,
+        media_title=photo_row.title, media_href=f"/image/{photo_id}",
+    )
+
+
+# ---- Public: read + create, scoped to one video ----
+
+
+@video_comments_router.get("/{video_id}/comments", response_model=list[CommentOut])
+async def list_video_comments(video_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Video.id).where(Video.id == video_id, Video.status == "published"))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Video not found")
+    return await _list_comments_for(db, photo_id=None, video_id=video_id)
+
+
+@video_comments_router.post("/{video_id}/comments", response_model=CommentOut, status_code=status.HTTP_201_CREATED)
+async def create_video_comment(
+    video_id: str,
+    payload: CommentCreateRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    commenter: User | None = Depends(get_optional_customer),
+):
+    result = await db.execute(
+        select(Video.id, Video.title).where(Video.id == video_id, Video.status == "published")
+    )
+    video_row = result.first()
+    if video_row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Video not found")
+
+    return await _create_comment_for(
+        db, request, payload, commenter,
+        photo_id=None, video_id=video_id,
+        media_title=video_row.title, media_href=f"/video/{video_id}",
+    )
+
+
+# ---- Moderation: admin/staff, cross-media, flat (comments:moderate) ----
 
 
 @moderation_router.get("", response_model=list[AdminCommentOut], dependencies=[Depends(require_permission("comments:moderate"))])
 async def list_all_comments(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
+    # Two queries (photo comments, video comments) merged and re-sorted in
+    # Python rather than one SQL UNION -- keeps each query a simple join
+    # against its own media table (mirrors how the two create/list
+    # endpoints above are already split), and the combined comment count
+    # across a whole gallery is small enough that sorting client-side
+    # here costs nothing meaningful.
+    photo_result = await db.execute(
         select(Comment, Photo.title)
         .join(Photo, Photo.id == Comment.photo_id)
         .order_by(Comment.created_at.desc())
     )
-    rows = result.all()
+    video_result = await db.execute(
+        select(Comment, Video.title)
+        .join(Video, Video.id == Comment.video_id)
+        .order_by(Comment.created_at.desc())
+    )
 
-    return [
+    out = [
         AdminCommentOut(
-            id=comment.id,
-            author=comment.author_name,
-            authorId=comment.author_id,
-            text=comment.text,
-            timestamp=comment.created_at.isoformat() if comment.created_at else "",
-            flagged=comment.is_flagged,
-            replies=[],
-            photoId=comment.photo_id,
-            photoTitle=photo_title,
+            id=comment.id, author=comment.author_name, authorId=comment.author_id,
+            text=comment.text, timestamp=comment.created_at.isoformat() if comment.created_at else "",
+            flagged=comment.is_flagged, replies=[],
+            photoId=comment.photo_id, photoTitle=title,
         )
-        for comment, photo_title in rows
+        for comment, title in photo_result.all()
+    ] + [
+        AdminCommentOut(
+            id=comment.id, author=comment.author_name, authorId=comment.author_id,
+            text=comment.text, timestamp=comment.created_at.isoformat() if comment.created_at else "",
+            flagged=comment.is_flagged, replies=[],
+            videoId=comment.video_id, videoTitle=title,
+        )
+        for comment, title in video_result.all()
     ]
+    out.sort(key=lambda c: c.timestamp, reverse=True)
+    return out
 
 
 @moderation_router.patch(

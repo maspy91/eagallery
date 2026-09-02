@@ -1,26 +1,16 @@
-import uuid
+"""
+The SecurityLog model itself now lives in app/models/security_log.py --
+see that file's docstring for why it was moved there (in short: a model
+living in app/core/ was invisible to both Alembic's autogenerate and the
+app's own DEBUG-mode table creation, both of which only scan
+app/models/). This module keeps just the log_security_event() helper,
+re-exporting SecurityLog for any existing import of
+`app.core.security_log.SecurityLog` to keep working.
+"""
 
-from sqlalchemy import Column, DateTime, String, Text, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import Base
-
-
-def gen_uuid() -> str:
-    return str(uuid.uuid4())
-
-
-class SecurityLog(Base):
-    __tablename__ = "security_logs"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid, index=True)
-    user_id = Column(String(36), nullable=True, index=True)
-    event_type = Column(String(50), nullable=False, index=True)
-    event_status = Column(String(30), nullable=False)
-    ip_address = Column(String(45), nullable=True, index=True)
-    user_agent = Column(Text, nullable=True)
-    details = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+from app.models.security_log import SecurityLog  # noqa: F401 -- re-exported for backward compatibility
 
 
 async def log_security_event(

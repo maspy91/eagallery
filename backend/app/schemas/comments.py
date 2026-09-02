@@ -27,9 +27,15 @@ CommentOut.model_rebuild()  # needed for the self-referential `replies: list[Com
 
 class AdminCommentOut(CommentOut):
     # Flat (non-nested) shape used only by the admin moderation list, which
-    # shows comments across every photo at once rather than one photo's tree.
-    photoId: str
-    photoTitle: str
+    # shows comments across every photo/video at once rather than one
+    # item's tree. Exactly one of photoId/videoId is set (mirrors the
+    # Comment.photo_id/video_id exactly-one-set DB constraint) -- the
+    # frontend uses whichever is present to decide the comment's link
+    # target and label ("Photo" vs "Video").
+    photoId: str | None = None
+    photoTitle: str | None = None
+    videoId: str | None = None
+    videoTitle: str | None = None
 
 
 class MessageResponse(BaseModel):

@@ -37,6 +37,14 @@ class PhotoOut(BaseModel):
     # camelCase to match the frontend's GalleryItem type (src/lib/types.ts).
     id: str
     image: str
+    # Not sensitive -- Supabase's public URL format already embeds this as
+    # its trailing path segments, so `image` leaks it either way. Exposed
+    # as its own field so callers (specifically the admin "Suggest
+    # description" AI feature, which needs to hand this back to
+    # POST /api/ai/describe-media) don't have to parse it back out of a
+    # URL string, which would silently break if the URL format ever
+    # changed.
+    objectKey: str
     title: str
     category: str
     viewCount: int

@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, String, Text, func
 
 from app.core.database import Base
 
@@ -23,12 +23,28 @@ class Comment(Base):
     later name change doesn't rewrite history, and guest comments (which
     have no User row at all) still have somewhere to store "Anonymous
     User".
+
+    photo_id / video_id: exactly one is set, never both, never neither
+    -- a comment belongs to one piece of media. Extending this table
+    (rather than a separate VideoComment table) keeps the tree-building,
+    rate-limiting, and notify-on-reply logic in one place instead of
+    two copies that can drift; a reply's parent_id always points at a
+    comment on the SAME media item, so parent.photo_id/video_id doesn't
+    need its own separate check here -- the routers enforce that when
+    resolving parent_id (see comments.py).
     """
 
     __tablename__ = "comments"
+    __table_args__ = (
+        CheckConstraint(
+            "(photo_id IS NOT NULL AND video_id IS NULL) OR (photo_id IS NULL AND video_id IS NOT NULL)",
+            name="ck_comments_exactly_one_media",
+        ),
+    )
 
     id = Column(String(36), primary_key=True, default=gen_uuid)
-    photo_id = Column(String(36), ForeignKey("photos.id", ondelete="CASCADE"), nullable=False, index=True)
+    photo_id = Column(String(36), ForeignKey("photos.id", ondelete="CASCADE"), nullable=True, index=True)
+    video_id = Column(String(36), ForeignKey("videos.id", ondelete="CASCADE"), nullable=True, index=True)
     parent_id = Column(String(36), ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
     author_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     author_name = Column(String(100), nullable=False)
@@ -37,3 +53,4 @@ class Comment(Base):
     is_flagged = Column(Boolean, nullable=False, default=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+

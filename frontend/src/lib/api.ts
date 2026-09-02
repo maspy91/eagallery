@@ -111,6 +111,7 @@ export const passwordApi = {
 export interface ApiPhoto {
 	id: string;
 	image: string;
+	objectKey: string;
 	title: string;
 	category: string;
 	viewCount: number;
@@ -171,6 +172,83 @@ export const photosApi = {
 	}
 };
 
+// ---- Videos ----
+// Mirrors photosApi below (same two-step presigned-upload flow, same
+// draft/published/flagged lifecycle, same shape of update/remove/like) --
+// see photosApi's own comments for anything not re-explained here.
+// Genuinely video-specific: sizeBytes/durationSeconds are sent to
+// getUploadUrl so the backend can reject an oversized/too-long upload
+// before issuing a presigned URL at all (see videos.py's get_upload_url
+// docstring for why that's a fast client-side courtesy, not the real
+// enforcement boundary), and create() takes durationSeconds/mimeType/an
+// optional posterObjectKey that photos don't have.
+
+export interface ApiVideo {
+	id: string;
+	video: string;
+	objectKey: string;
+	poster: string | null;
+	title: string;
+	category: string;
+	viewCount: number;
+	likeCount: number;
+	description: string;
+	specs: string[];
+	status: 'draft' | 'published' | 'flagged';
+	durationSeconds: number;
+	liked: boolean;
+}
+
+export interface VideoListParams {
+	status?: 'draft' | 'published' | 'flagged';
+	category?: string;
+	random?: number;
+	limit?: number;
+}
+
+export const videosApi = {
+	list: (params: VideoListParams = {}) => get<ApiVideo[]>(`/api/videos${buildQuery({ ...params })}`),
+	get: (id: string) => get<ApiVideo>(`/api/videos/${id}`),
+	getUploadUrl: (filename: string, contentType: string, sizeBytes: number, durationSeconds: number) =>
+		post<{ objectKey: string; uploadUrl: string; publicUrl: string }>('/api/videos/upload-url', {
+			filename,
+			content_type: contentType,
+			size_bytes: sizeBytes,
+			duration_seconds: durationSeconds
+		}),
+	create: (input: {
+		objectKey: string;
+		posterObjectKey?: string | null;
+		title: string;
+		category: string;
+		description: string;
+		specs: string[];
+		durationSeconds: number;
+		mimeType: string;
+	}) => post<ApiVideo>('/api/videos', input),
+	update: (
+		id: string,
+		input: Partial<{
+			title: string;
+			category: string;
+			description: string;
+			specs: string[];
+			status: string;
+			posterObjectKey: string | null;
+		}>
+	) => request<ApiVideo>(`/api/videos/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+	remove: (id: string) => del<MessageResponse>(`/api/videos/${id}`),
+	toggleLike: (id: string) => post<{ liked: boolean; likeCount: number }>(`/api/videos/${id}/like`, {}),
+	// Same direct-to-storage upload as photosApi.uploadToStorage -- see
+	// its comment. Reused verbatim rather than duplicated since the
+	// storage-side contract (presigned PUT, matching Content-Type) is
+	// identical for both media types.
+	uploadToStorage: async (uploadUrl: string, file: File) => {
+		const res = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+		if (!res.ok) throw new ApiError(res.status, 'Upload to storage failed');
+	}
+};
+
 // ---- Comments ----
 // Two backend routes: /api/photos/{id}/comments (public read + create,
 // nested tree, scoped to one photo) and /api/comments (moderation, flat,
@@ -187,8 +265,14 @@ export interface ApiComment {
 }
 
 export interface ApiAdminComment extends ApiComment {
-	photoId: string;
-	photoTitle: string;
+	// Exactly one of photoId/videoId is set, matching the backend's
+	// Comment.photo_id/video_id exactly-one-set DB constraint -- use
+	// whichever is present to build the link and label ("Photo" vs
+	// "Video") for this row.
+	photoId: string | null;
+	photoTitle: string | null;
+	videoId: string | null;
+	videoTitle: string | null;
 }
 
 export const commentsApi = {
@@ -200,6 +284,16 @@ export const commentsApi = {
 	setFlagged: (id: string, flagged: boolean) =>
 		request<MessageResponse>(`/api/comments/${id}`, { method: 'PATCH', body: JSON.stringify({ flagged }) }),
 	remove: (id: string) => del<MessageResponse>(`/api/comments/${id}`)
+};
+
+// Same tree shape and rate limit as commentsApi above, just scoped to
+// /api/videos/{id}/comments instead of /api/photos/{id}/comments --
+// moderation stays on the single shared commentsApi.listAll()/setFlagged()/
+// remove() above, since /api/comments already covers both media types.
+export const videoCommentsApi = {
+	list: (videoId: string) => get<ApiComment[]>(`/api/videos/${videoId}/comments`),
+	create: (videoId: string, text: string, parentId?: string) =>
+		post<ApiComment>(`/api/videos/${videoId}/comments`, { text, parent_id: parentId ?? null })
 };
 
 // ---- Business conversations ----
@@ -237,6 +331,103 @@ export const conversationsApi = {
 		request<ApiConversation>(`/api/conversations/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
 	// Shared -- works for either side, backend resolves who's calling:
 	reply: (id: string, text: string) => post<ApiConversation>(`/api/conversations/${id}/messages`, { text })
+};
+
+// ---- AI (describe-media) ----
+
+export interface DescribeMediaResponse {
+	title: string;
+	description: string;
+	specs: string[];
+}
+
+export const aiApi = {
+	// objectKey must belong to an already-uploaded Photo/Video row (the
+	// backend verifies this) -- call after the normal upload-url + create
+	// steps have both already happened, not instead of them. Returns a
+	// SUGGESTION only; the caller decides whether to apply it to the
+	// edit form, never auto-saved.
+	describeMedia: (objectKey: string, mediaType: 'photo' | 'video', hint = '') =>
+		post<DescribeMediaResponse>('/api/ai/describe-media', { objectKey, mediaType, hint })
+};
+
+// ---- Chat ----
+// Customer-facing widget (works for logged-in customers AND anonymous
+// visitors -- identity is handled entirely by cookies, credentials:
+// 'include' on every request via the shared request() helper already
+// sends whichever one applies) plus the admin queue/reply/handback side.
+
+export type ChatMode = 'ai' | 'pending_admin' | 'human';
+export type ChatSenderRole = 'ai' | 'customer' | 'admin';
+
+export interface ApiChatMessage {
+	id: string;
+	senderRole: ChatSenderRole;
+	senderName: string;
+	text: string;
+	timestamp: string;
+	isSystem: boolean;
+}
+
+export interface ApiChatThread {
+	id: string;
+	mode: ChatMode;
+	contactEmail: string | null;
+	messages: ApiChatMessage[];
+}
+
+export interface ApiChatReply {
+	threadId: string;
+	reply: string;
+	mode: ChatMode;
+	messages: ApiChatMessage[];
+}
+
+export const chatApi = {
+	// threadId omitted starts a new thread; the backend creates one and
+	// returns its id in the response, same pattern as the rest of this
+	// app's create-on-first-use flows.
+	sendMessage: (text: string, threadId?: string) =>
+		post<ApiChatReply>('/api/chat', { text, threadId: threadId ?? null }),
+	getThread: (threadId: string) => get<ApiChatThread>(`/api/chat/${threadId}`),
+	setContactEmail: (threadId: string, email: string) =>
+		post<ApiChatThread>(`/api/chat/${threadId}/contact-email`, { email })
+};
+
+export interface ApiAdminChatThread {
+	id: string;
+	mode: ChatMode;
+	displayName: string;
+	contactEmail: string | null;
+	isGuest: boolean;
+	assignedAdminName: string | null;
+	lastMessagePreview: string;
+	updatedAt: string;
+}
+
+export interface ApiAdminChatThreadDetail {
+	id: string;
+	mode: ChatMode;
+	displayName: string;
+	contactEmail: string | null;
+	isGuest: boolean;
+	messages: ApiChatMessage[];
+}
+
+export const adminChatApi = {
+	listThreads: () => get<ApiAdminChatThread[]>('/api/admin/chat/threads'),
+	getThread: (threadId: string) => get<ApiAdminChatThreadDetail>(`/api/admin/chat/threads/${threadId}`),
+	reply: (threadId: string, text: string) =>
+		post<ApiAdminChatThreadDetail>(`/api/admin/chat/threads/${threadId}/reply`, { text }),
+	// 'human' explicitly picks up a pending_admin thread without
+	// necessarily replying yet; 'ai' hands a human-owned thread back --
+	// see the backend's set_thread_mode docstring for why this is a
+	// separate action from reply() rather than folded into it.
+	setMode: (threadId: string, mode: 'human' | 'ai') =>
+		request<ApiAdminChatThreadDetail>(`/api/admin/chat/threads/${threadId}/mode`, {
+			method: 'PATCH',
+			body: JSON.stringify({ mode })
+		})
 };
 
 // ---- Notifications ----

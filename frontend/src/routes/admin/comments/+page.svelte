@@ -75,7 +75,15 @@
 						<div class="flex items-center gap-2 flex-wrap text-sm">
 							<span class="font-semibold text-foreground">{comment.author}</span>
 							<span class="text-muted-foreground">on</span>
-							<a href="/image/{comment.photoId}" class="text-primary hover:underline">{comment.photoTitle}</a>
+							<a
+								href={comment.photoId ? `/image/${comment.photoId}` : `/video/${comment.videoId}`}
+								class="text-primary hover:underline"
+							>
+								{comment.photoTitle ?? comment.videoTitle}
+							</a>
+							{#if comment.videoId}
+								<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground uppercase tracking-wide">Video</span>
+							{/if}
 							<span class="text-xs text-muted-foreground">· {new Date(comment.timestamp).toLocaleString()}</span>
 							{#if comment.flagged}
 								<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive/10 text-destructive">Flagged</span>

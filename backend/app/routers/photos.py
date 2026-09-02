@@ -44,6 +44,7 @@ async def _photo_out(db: AsyncSession, photo: Photo, viewer: User | None) -> Pho
     return PhotoOut(
         id=photo.id,
         image=public_url(photo.object_key),
+        objectKey=photo.object_key,
         title=photo.title,
         category=photo.category,
         viewCount=photo.view_count,

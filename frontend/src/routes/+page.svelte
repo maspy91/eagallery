@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import GalleryCard from '$lib/components/GalleryCard.svelte';
+	import GalleryVideoCard from '$lib/components/GalleryVideoCard.svelte';
 	import StatsSection from '$lib/components/StatsSection.svelte';
 	import Testimonials from '$lib/components/Testimonials.svelte';
 	import { heroBanner } from '$lib/data/mock';
-	import { photosApi, type ApiPhoto } from '$lib/api';
+	import { photosApi, videosApi, type ApiPhoto, type ApiVideo } from '$lib/api';
 
 	const FEATURED_COUNT = 9;
+	const FEATURED_VIDEO_COUNT = 3;
 
 	// The backend picks the random 9 (ORDER BY random() LIMIT 9, filtered
 	// to published-only server-side) -- fetched client-side after mount so
@@ -16,6 +18,14 @@
 	let loadError = false;
 	let featuredItems: ApiPhoto[] = [];
 
+	// Videos load independently of photos -- a slow/failed video fetch
+	// shouldn't block or blank out the photo grid above it, and vice
+	// versa, so this has its own loading/error state rather than sharing
+	// the photo grid's.
+	let videosLoading = true;
+	let videosLoadError = false;
+	let featuredVideos: ApiVideo[] = [];
+
 	onMount(async () => {
 		try {
 			featuredItems = await photosApi.list({ status: 'published', random: FEATURED_COUNT });
@@ -23,6 +33,14 @@
 			loadError = true;
 		} finally {
 			loading = false;
+		}
+
+		try {
+			featuredVideos = await videosApi.list({ status: 'published', random: FEATURED_VIDEO_COUNT });
+		} catch {
+			videosLoadError = true;
+		} finally {
+			videosLoading = false;
 		}
 	});
 </script>
@@ -65,6 +83,23 @@
 		</div>
 	{/if}
 </section>
+
+{#if !videosLoading && !videosLoadError && featuredVideos.length > 0}
+	<section class="max-w-7xl mx-auto px-4 pb-20">
+		<div class="mb-12 animate-fade-in">
+			<h2 class="text-4xl font-bold text-foreground mb-4">Featured Videos</h2>
+			<p class="text-lg text-muted-foreground">Short clips showing our products in action</p>
+		</div>
+
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+			{#each featuredVideos as item, index (item.id)}
+				<div class="animate-fade-in" style="animation-delay: {index * 0.1}s">
+					<GalleryVideoCard {item} />
+				</div>
+			{/each}
+		</div>
+	</section>
+{/if}
 
 <StatsSection />
 

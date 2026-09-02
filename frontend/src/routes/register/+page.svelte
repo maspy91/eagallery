@@ -22,9 +22,7 @@
 	let turnstileWidget: TurnstileWidget;
 
 	// Relative -- same-origin via the proxy migration, no more PUBLIC_API_URL.
-	const googleLoginUrl = `/api/customer/oauth/google/login`;
-
-	// const googleLoginUrl = "https://eagallery.onrender.com/api/customer/oauth/google/callback";
+	const googleLoginUrl = '/api/customer/oauth/google/login';
 
 	onMount(() => {
 		if ($currentUser?.role === 'customer') goto('/dashboard');

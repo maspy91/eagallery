@@ -3,13 +3,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 
 from app.core.bootstrap import ensure_admin_bootstrap
 from app.core.config import get_settings
 from app.core.database import Base, engine
 from app.core.model_registry import discover_models
 from app.core.redis import redis_client
-from app.routers import admin_auth, comments, conversations, customer_auth, notifications, photos
+from app.core.storage import ensure_bucket
+from app.routers import admin_auth, ai, chat, comments, conversations, customer_auth, notifications, photos, videos
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,6 +46,33 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("Admin bootstrap skipped due to error: %s", exc)
 
+    try:
+        # Idempotent -- creates the bucket with these limits if it
+        # doesn't exist yet, or updates an existing one to match. See
+        # ensure_bucket()'s docstring for why this is where the real
+        # 10MB/5MB enforcement actually lives (Supabase Storage itself,
+        # not app code). No-ops cleanly if Supabase isn't configured at
+        # all (get_supabase_client() returns None), same as every other
+        # optional integration in this startup sequence.
+        if settings.SUPABASE_STORAGE_BUCKET:
+            await run_in_threadpool(
+                ensure_bucket,
+                settings.SUPABASE_STORAGE_BUCKET,
+                public=True,
+                file_size_limit=settings.MAX_PHOTO_SIZE_BYTES,
+                allowed_mime_types=["image/jpeg", "image/png", "image/webp", "image/gif"],
+            )
+        if settings.SUPABASE_VIDEO_BUCKET:
+            await run_in_threadpool(
+                ensure_bucket,
+                settings.SUPABASE_VIDEO_BUCKET,
+                public=True,
+                file_size_limit=settings.MAX_VIDEO_SIZE_BYTES,
+                allowed_mime_types=["video/mp4"],
+            )
+    except Exception as exc:
+        logger.warning("Storage bucket provisioning skipped due to error: %s", exc)
+
     yield
 
     try:
@@ -65,10 +94,15 @@ app.add_middleware(
 app.include_router(customer_auth.router)
 app.include_router(admin_auth.router)
 app.include_router(photos.router)
+app.include_router(videos.router)
 app.include_router(comments.photo_comments_router)
+app.include_router(comments.video_comments_router)
 app.include_router(comments.moderation_router)
 app.include_router(conversations.router)
 app.include_router(notifications.router)
+app.include_router(ai.router)
+app.include_router(chat.router)
+app.include_router(chat.admin_router)
 
 # Future domain routers (analytics, etc.) get included here the same way.
 

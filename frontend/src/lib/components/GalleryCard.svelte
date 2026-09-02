@@ -1,18 +1,39 @@
 <script lang="ts">
 	import { Eye, Heart, Share2 } from '@lucide/svelte';
-	import type { GalleryItem } from '$lib/types';
+	import { photosApi, ApiError, type ApiPhoto } from '$lib/api';
+	import { currentUser, authChecked } from '$lib/stores/auth';
 
-	export let item: GalleryItem;
+	// Was `item: GalleryItem` with a purely local, never-persisted like
+	// toggle (flip a local boolean, +/-1 on a local counter) -- clicking
+	// like here did nothing server-side; a page refresh silently reverted
+	// it. GalleryCard's only real caller (src/routes/+page.svelte) already
+	// passes a live ApiPhoto, so this switches to that type and calls
+	// photosApi.toggleLike() for real, matching the same
+	// login-gate-then-toggle pattern image/[id]/+page.svelte already uses.
+	export let item: ApiPhoto;
 
-	let liked = false;
-	let currentLikes = item.likeCount;
 	let hovered = false;
+	let likePending = false;
 
-	function handleLike(e: MouseEvent) {
+	async function handleLike(e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
-		liked = !liked;
-		currentLikes += liked ? 1 : -1;
+		if (likePending || !$authChecked) return;
+		if ($currentUser?.role !== 'customer') {
+			window.location.href = '/login';
+			return;
+		}
+		likePending = true;
+		try {
+			const result = await photosApi.toggleLike(item.id);
+			item = { ...item, liked: result.liked, likeCount: result.likeCount };
+		} catch {
+			// swallow -- same as the detail page: a failed toggle isn't
+			// worth interrupting the card grid for, the button just stays
+			// at its last known-good state
+		} finally {
+			likePending = false;
+		}
 	}
 
 	async function handleShare(e: MouseEvent) {
@@ -65,10 +86,11 @@
 			</div>
 			<button
 				on:click={handleLike}
-				class="flex items-center gap-1.5 transition-colors {liked ? 'text-primary' : 'hover:text-primary'}"
+				disabled={likePending || !$authChecked}
+				class="flex items-center gap-1.5 transition-colors disabled:opacity-50 {item.liked ? 'text-primary' : 'hover:text-primary'}"
 			>
-				<Heart class="w-4 h-4 {liked ? 'fill-current' : ''}" />
-				<span>{currentLikes.toLocaleString()}</span>
+				<Heart class="w-4 h-4 {item.liked ? 'fill-current' : ''}" />
+				<span>{item.likeCount.toLocaleString()}</span>
 			</button>
 			<button
 				on:click={handleShare}

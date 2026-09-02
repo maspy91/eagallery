@@ -12,3 +12,5 @@ bin/
 .cfg
 .gitignore
 pyvenv.cfg
+include/
+lib/

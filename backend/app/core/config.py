@@ -56,10 +56,44 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str | None = None  # Service role key recommended for backend operations
     SUPABASE_STORAGE_BUCKET: str | None = None  # e.g., "photos"
 
-    # ---- AI feature ----
+    # ---- Supabase Storage (Video Storage) ----
+    # A SEPARATE bucket from SUPABASE_STORAGE_BUCKET, not a shared one --
+    # Supabase enforces file_size_limit and allowed_mime_types at the
+    # bucket level (there's no per-request size param on
+    # create_signed_upload_url()), so photos and videos need their own
+    # buckets to get their own, different, storage-service-enforced
+    # limits rather than trusting the app layer to police a shared one.
+    SUPABASE_VIDEO_BUCKET: str | None = None  # e.g., "videos"
+    MAX_PHOTO_SIZE_BYTES: int = 10 * 1024 * 1024  # 10MB
+    MAX_VIDEO_SIZE_BYTES: int = 5 * 1024 * 1024  # 5MB
+    MAX_VIDEO_DURATION_SECONDS: int = 8
+
+    # ---- AI feature (Gemini) ----
+    # AI_API_KEY (not GEMINI_API_KEY) was already the scaffolded name here
+    # before this feature was built -- kept as-is rather than renamed, so
+    # any deployment that had already set it keeps working.
     AI_API_KEY: str | None = None
     AI_RATE_LIMIT_MAX_REQUESTS: int = 20
     AI_RATE_LIMIT_WINDOW_MINUTES: int = 60
+    # A single config constant for the model ID, per Google's own guidance
+    # (see ai.google.dev/gemini-api/docs/models): don't hardcode a version
+    # string in multiple places, and don't use a bare "-latest" alias in
+    # production (it silently hot-swaps to whatever Google ships next,
+    # which is a bigger behavior-change risk for a scoped/grounded chat
+    # feature than a controlled upgrade). gemini-2.5-flash and
+    # gemini-2.5-flash-lite are BOTH scheduled to shut down in October
+    # 2026 -- gemini-3.5-flash is the current stable (non-preview) Flash
+    # tier as of this writing: fast and cheap enough for both this
+    # feature's chat traffic and its multimodal (image/video) upload-assist
+    # calls. Change this one setting, not code, when Google's next
+    # generation ships.
+    AI_MODEL: str = "gemini-3.5-flash"
+    # Hard ceiling on a single response's length -- cost/abuse containment
+    # for the one place in this app where an external paid API sits in the
+    # request path. Generous enough for a real chat reply or a photo/video
+    # description suggestion; not generous enough for someone to try to
+    # turn the chat endpoint into a free long-form text generator.
+    AI_MAX_OUTPUT_TOKENS: int = 1024
 
     # ---- Google OAuth2 (customer "Sign in with Google" only -- admin/
     # staff never authenticate this way, same reasoning as why they have
@@ -122,6 +156,14 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Partial Supabase Storage configuration detected. Set all of SUPABASE_URL, "
                 "SUPABASE_KEY, and SUPABASE_STORAGE_BUCKET, or none of them."
+            )
+        # SUPABASE_VIDEO_BUCKET reuses SUPABASE_URL/SUPABASE_KEY (same
+        # Supabase project, just a second bucket) -- it can't be set
+        # without the base connection also being configured, since
+        # there'd be no client to create it with.
+        if self.SUPABASE_VIDEO_BUCKET and not (self.SUPABASE_URL and self.SUPABASE_KEY):
+            raise ValueError(
+                "SUPABASE_VIDEO_BUCKET requires SUPABASE_URL and SUPABASE_KEY to also be set."
             )
         return self
 

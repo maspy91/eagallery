@@ -3,9 +3,19 @@
 	import type { CommentNode } from '$lib/types';
 	import CommentItem from './CommentItem.svelte';
 	import { currentUser } from '$lib/stores/auth';
-	import { commentsApi, ApiError, type ApiComment } from '$lib/api';
+	import { commentsApi, videoCommentsApi, ApiError, type ApiComment } from '$lib/api';
 
-	export let photoId: string;
+	// Exactly one of these is set by the caller -- mirrors the backend's
+	// Comment.photo_id/video_id exactly-one-set constraint. Kept as two
+	// separate optional props rather than a single `mediaId` + `mediaType`
+	// pair since it reads more clearly at each call site (<CommentSection
+	// photoId={item.id} /> vs. videoId={item.id}) and TypeScript can't
+	// usefully narrow a generic pair anyway.
+	export let photoId: string | undefined = undefined;
+	export let videoId: string | undefined = undefined;
+
+	$: mediaId = (photoId ?? videoId)!;
+	$: api = photoId !== undefined ? commentsApi : videoCommentsApi;
 
 	// ApiComment.authorId is string | null (mirrors the backend's Optional
 	// column); CommentNode.authorId is string | undefined (the app-wide
@@ -36,7 +46,7 @@
 		loading = true;
 		loadError = '';
 		try {
-			comments = (await commentsApi.list(id)).map(toCommentNode);
+			comments = (await api.list(id)).map(toCommentNode);
 		} catch (err) {
 			loadError = err instanceof ApiError ? err.message : 'Could not load comments.';
 		} finally {
@@ -44,7 +54,7 @@
 		}
 	}
 
-	$: load(photoId);
+	$: load(mediaId);
 
 	function countAll(nodes: CommentNode[]): number {
 		return nodes.reduce((sum, c) => sum + 1 + countAll(c.replies), 0);
@@ -64,7 +74,7 @@
 		error = '';
 		submitting = true;
 		try {
-			const created = await commentsApi.create(photoId, trimmed);
+			const created = await api.create(mediaId, trimmed);
 			comments = [toCommentNode(created), ...comments];
 			newComment = '';
 		} catch (err) {
@@ -76,7 +86,7 @@
 
 	async function addReply(commentId: string, text: string) {
 		try {
-			const reply = await commentsApi.create(photoId, text, commentId);
+			const reply = await api.create(mediaId, text, commentId);
 			const replyNode = toCommentNode(reply);
 			function walk(nodes: CommentNode[]): CommentNode[] {
 				return nodes.map((c) => {

@@ -9,8 +9,10 @@
 	import {
 		LayoutDashboard,
 		Images,
+		Video,
 		Users,
 		MessageSquareWarning,
+		MessageCircle,
 		Mail,
 		ArrowLeft
 	} from '@lucide/svelte';
@@ -21,8 +23,10 @@
 	$: navItems = [
 		{ href: '/admin', label: 'Overview', icon: LayoutDashboard, show: hasPermission(data.user, 'analytics:view') },
 		{ href: '/admin/photos', label: 'Photos', icon: Images, show: hasPermission(data.user, 'photos:manage') },
+		{ href: '/admin/videos', label: 'Videos', icon: Video, show: hasPermission(data.user, 'photos:manage') },
 		{ href: '/admin/comments', label: 'Comments', icon: MessageSquareWarning, show: hasPermission(data.user, 'comments:moderate') },
 		{ href: '/admin/requests', label: 'Requests', icon: Mail, show: hasPermission(data.user, 'requests:respond') },
+		{ href: '/admin/chat', label: 'Live Chat', icon: MessageCircle, show: hasPermission(data.user, 'requests:respond') },
 		{ href: '/admin/roles', label: 'Roles & Staff', icon: Users, show: hasPermission(data.user, 'roles:manage') }
 	].filter((n) => n.show);
 </script>
