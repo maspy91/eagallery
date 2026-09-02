@@ -1,1 +1,13 @@
 .vercel
+# Python venv
+backend/venv/
+backend/.venv/
+backend/Include/
+backend/Lib/
+backend/lib/
+backend/bin/
+backend/Scripts/
+backend/pyvenv.cfg
+__pycache__/
+*.pyc
+.pytest_cache/
