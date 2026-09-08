@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
+from app.core.csv_export import EXPORT_ROW_LIMIT, csv_response, parse_date_range
 from app.core.database import get_db
 from app.core.deps import (
     get_current_customer,
@@ -21,7 +22,9 @@ from app.schemas.photos import (
     LikeResponse,
     MessageResponse,
     PhotoCreateRequest,
+    PhotoMetaOut,
     PhotoOut,
+    PhotoStatsOut,
     PhotoUpdateRequest,
     UploadUrlRequest,
     UploadUrlResponse,
@@ -115,18 +118,16 @@ async def create_photo(
 # ---- Read (public, with more visible to staff/admin) ----
 
 
-@router.get("", response_model=list[PhotoOut])
-async def list_photos(
-    db: AsyncSession = Depends(get_db),
-    viewer: User | None = Depends(get_optional_customer),
-    staff_viewer: User | None = Depends(get_optional_staff_or_admin),
-    status_filter: str | None = Query(default=None, alias="status"),
-    category: str | None = Query(default=None),
-    random: int | None = Query(default=None, ge=1, le=100, description="Return this many photos in random order"),
-    limit: int = Query(default=50, ge=1, le=100),
+def _apply_photo_filters(
+    query,
+    *,
+    staff_viewer: User | None,
+    status_filter: str | None,
+    category: str | None,
+    q: str | None,
+    date_from: str | None,
+    date_to: str | None,
 ):
-    query = select(Photo)
-
     if staff_viewer is not None:
         # Staff/admin may filter by any status (or see everything, unfiltered).
         if status_filter:
@@ -142,6 +143,42 @@ async def list_photos(
     if category:
         query = query.where(Photo.category == category)
 
+    if q:
+        like = f"%{q}%"
+        query = query.where(or_(Photo.title.ilike(like), Photo.category.ilike(like), Photo.description.ilike(like)))
+
+    parsed_from, parsed_to = parse_date_range(date_from, date_to)
+    if parsed_from:
+        query = query.where(Photo.created_at >= parsed_from)
+    if parsed_to:
+        query = query.where(Photo.created_at <= parsed_to)
+
+    return query
+
+
+@router.get("", response_model=list[PhotoOut])
+async def list_photos(
+    db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_optional_customer),
+    staff_viewer: User | None = Depends(get_optional_staff_or_admin),
+    status_filter: str | None = Query(default=None, alias="status"),
+    category: str | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=255, description="Search by title, category, or description"),
+    date_from: str | None = Query(default=None, description="YYYY-MM-DD, inclusive"),
+    date_to: str | None = Query(default=None, description="YYYY-MM-DD, inclusive"),
+    random: int | None = Query(default=None, ge=1, le=100, description="Return this many photos in random order"),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    query = _apply_photo_filters(
+        select(Photo),
+        staff_viewer=staff_viewer,
+        status_filter=status_filter,
+        category=category,
+        q=q,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
     if random:
         query = query.order_by(func.random()).limit(random)
     else:
@@ -151,6 +188,94 @@ async def list_photos(
     photos = result.scalars().all()
 
     return [await _photo_out(db, p, viewer) for p in photos]
+
+
+@router.get(
+    "/stats",
+    response_model=PhotoStatsOut,
+    dependencies=[Depends(require_permission("analytics:view"))],
+)
+async def get_photo_stats(db: AsyncSession = Depends(get_db)):
+    """Single aggregate query (COUNT/SUM/FILTER) for the admin dashboard
+    -- correct no matter how many photos exist, unlike deriving these
+    numbers from a capped list() call on the frontend."""
+    result = await db.execute(
+        select(
+            func.count().filter(Photo.status == "published"),
+            func.coalesce(func.sum(Photo.view_count), 0),
+            func.coalesce(func.sum(Photo.like_count), 0),
+            func.count().filter(Photo.status == "flagged"),
+        )
+    )
+    published_count, total_views, total_likes, flagged_count = result.one()
+    return PhotoStatsOut(
+        publishedCount=published_count,
+        totalViews=total_views,
+        totalLikes=total_likes,
+        flaggedCount=flagged_count,
+    )
+
+
+@router.get("/export")
+async def export_photos(
+    db: AsyncSession = Depends(get_db),
+    staff: User = Depends(require_permission("photos:manage")),
+    status_filter: str | None = Query(default=None, alias="status"),
+    category: str | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=255),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
+):
+    """CSV of photos matching the same filters as the list endpoint --
+    admin/staff only (photos:manage). Reuses _apply_photo_filters with
+    staff_viewer=staff so status_filter isn't restricted to
+    published-only, same as list_photos already allows once a staff
+    viewer is present."""
+    query = _apply_photo_filters(
+        select(Photo),
+        staff_viewer=staff,
+        status_filter=status_filter,
+        category=category,
+        q=q,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    query = query.order_by(Photo.created_at.desc()).limit(EXPORT_ROW_LIMIT)
+
+    result = await db.execute(query)
+    photos = result.scalars().all()
+
+    rows = (
+        [
+            p.id,
+            p.title,
+            p.category,
+            p.status,
+            str(p.view_count),
+            str(p.like_count),
+            p.created_at.isoformat() if p.created_at else "",
+        ]
+        for p in photos
+    )
+    return csv_response(
+        "photos.csv", ["ID", "Title", "Category", "Status", "Views", "Likes", "Created At"], rows
+    )
+
+
+@router.get("/{photo_id}/meta", response_model=PhotoMetaOut)
+async def get_photo_meta(photo_id: str, db: AsyncSession = Depends(get_db)):
+    """Public, view-count-free. See PhotoMetaOut's docstring for why
+    this exists as its own endpoint rather than reusing get_photo."""
+    result = await db.execute(select(Photo).where(Photo.id == photo_id))
+    photo = result.scalar_one_or_none()
+    if not photo or photo.status != "published":
+        # Same reasoning as get_photo -- 404, not 403, so a draft/flagged
+        # photo's existence isn't leaked via this endpoint either.
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Photo not found")
+
+    return PhotoMetaOut(
+        title=photo.title, description=photo.description, image=public_url(photo.object_key), category=photo.category
+    )
 
 
 @router.get("/{photo_id}", response_model=PhotoOut)

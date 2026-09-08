@@ -2,6 +2,12 @@
 	import { onMount } from 'svelte';
 	import { Flag, Trash2, CircleCheckBig, LoaderCircle } from '@lucide/svelte';
 	import { commentsApi, ApiError, type ApiAdminComment } from '$lib/api';
+	import AdminListControls from '$lib/components/AdminListControls.svelte';
+
+	let search = '';
+	let dateFrom = '';
+	let dateTo = '';
+	$: exportHref = commentsApi.exportUrl({ q: search, date_from: dateFrom, date_to: dateTo });
 
 	let comments: ApiAdminComment[] = [];
 	let loading = true;
@@ -12,7 +18,7 @@
 		loading = true;
 		loadError = '';
 		try {
-			comments = await commentsApi.listAll();
+			comments = await commentsApi.listAll({ q: search, date_from: dateFrom, date_to: dateTo });
 		} catch (err) {
 			loadError = err instanceof ApiError ? err.message : 'Could not load comments.';
 		} finally {
@@ -47,13 +53,15 @@
 	}
 </script>
 
-<svelte:head><title>Comments — EddyArt Gallery Admin</title></svelte:head>
+<svelte:head><title>Comments — EddyArt Admin</title></svelte:head>
 
 <div class="space-y-6">
 	<div>
 		<h1 class="text-3xl font-bold text-foreground">Comments</h1>
 		<p class="text-muted-foreground mt-1">Moderate comments across the whole gallery.</p>
 	</div>
+
+	<AdminListControls bind:search bind:dateFrom bind:dateTo {exportHref} searchPlaceholder="Search by comment text or author…" onChange={load} />
 
 	<div class="glass elevated rounded-xl divide-y divide-border/60">
 		{#if loading}

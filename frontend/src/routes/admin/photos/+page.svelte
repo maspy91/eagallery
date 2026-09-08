@@ -2,6 +2,12 @@
 	import { onMount } from 'svelte';
 	import { Upload, Pencil, Trash2, Eye, Heart, LoaderCircle, X, Sparkles } from '@lucide/svelte';
 	import { photosApi, aiApi, type ApiPhoto, ApiError } from '$lib/api';
+	import AdminListControls from '$lib/components/AdminListControls.svelte';
+
+	let search = '';
+	let dateFrom = '';
+	let dateTo = '';
+	$: exportHref = photosApi.exportUrl({ q: search, date_from: dateFrom, date_to: dateTo });
 
 	let items: ApiPhoto[] = [];
 	let loading = true;
@@ -72,7 +78,7 @@
 		listError = '';
 		try {
 			// Admin/staff see every status here, not just published.
-			items = await photosApi.list({ limit: 100 });
+			items = await photosApi.list({ limit: 100, q: search, date_from: dateFrom, date_to: dateTo });
 		} catch (err) {
 			listError = err instanceof ApiError ? err.message : 'Could not load photos.';
 		} finally {
@@ -189,7 +195,7 @@
 	}
 </script>
 
-<svelte:head><title>Photos — EddyArt Gallery Admin</title></svelte:head>
+<svelte:head><title>Photos — EddyArt Admin</title></svelte:head>
 
 <div class="space-y-6">
 	<div class="flex items-center justify-between flex-wrap gap-4">
@@ -223,6 +229,8 @@
 			{/if}
 		</div>
 	</div>
+
+	<AdminListControls bind:search bind:dateFrom bind:dateTo {exportHref} searchPlaceholder="Search by title, category, or description…" onChange={loadPhotos} />
 
 	<div class="glass elevated rounded-xl overflow-hidden">
 		{#if loading}

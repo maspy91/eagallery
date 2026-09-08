@@ -59,7 +59,7 @@
 </script>
 
 <svelte:head>
-	<title>Admin Access — EddyArt Gallery</title>
+	<title>Admin Access — EddyArt</title>
 </svelte:head>
 
 <div class="min-h-[calc(100vh-4rem)] flex items-center justify-center relative overflow-hidden py-16 px-4">

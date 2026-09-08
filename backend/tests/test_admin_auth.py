@@ -180,3 +180,146 @@ async def test_rate_limit_on_admin_login(client, admin_user):
         "/api/auth/login", json={"email": "admin@eddyartgallery.app", "password": "wrong-password"}
     )
     assert resp.status_code == 429
+
+
+# ============================================================
+# Account/profile settings: update name, change email, change password
+# ============================================================
+
+
+async def _login_admin(client, email="admin@eddyartgallery.app", password="super-secret-admin-1"):
+    resp = await client.post("/api/auth/login", json={"email": email, "password": password})
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def test_admin_update_profile_name_only(client, admin_user):
+    await _login_admin(client)
+
+    resp = await client.patch("/api/auth/me", json={"name": "Admin Updated"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["name"] == "Admin Updated"
+    assert resp.json()["email"] == "admin@eddyartgallery.app"
+
+    resp = await client.get("/api/auth/me")
+    assert resp.json()["name"] == "Admin Updated"
+
+
+async def test_admin_update_profile_requires_login(client):
+    resp = await client.patch("/api/auth/me", json={"name": "Nobody"})
+    assert resp.status_code == 401
+
+
+async def test_admin_change_email_requires_correct_current_password(client, admin_user):
+    await _login_admin(client)
+
+    resp = await client.post(
+        "/api/auth/change-email", json={"email": "new-admin@example.com", "currentPassword": "wrong-password"}
+    )
+    assert resp.status_code == 401
+
+    resp = await client.get("/api/auth/me")
+    assert resp.json()["email"] == "admin@eddyartgallery.app"
+
+
+async def test_admin_change_email_success_and_rejects_duplicate(client, admin_user):
+    other_staff = await _create_user(
+        email="other-staff@example.com",
+        name="Other Staff",
+        password_hash=hash_password("other-pass-1"),
+        role="staff",
+        email_verified=True,
+        is_active=True,
+    )
+
+    await _login_admin(client)
+
+    # Can't take an email already registered to another account (the
+    # unique constraint is global across roles, not just admin/staff).
+    resp = await client.post(
+        "/api/auth/change-email",
+        json={"email": "other-staff@example.com", "currentPassword": "super-secret-admin-1"},
+    )
+    assert resp.status_code == 409
+
+    # A genuinely new email succeeds immediately -- unlike the customer
+    # side, admin/staff login never checks email_verified, so there's no
+    # re-verification step and no session disruption.
+    resp = await client.post(
+        "/api/auth/change-email",
+        json={"email": "admin-new@example.com", "currentPassword": "super-secret-admin-1"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["email"] == "admin-new@example.com"
+
+    resp = await client.get("/api/auth/me")
+    assert resp.status_code == 200
+    assert resp.json()["email"] == "admin-new@example.com"
+
+    # Old email no longer works for login; new one does.
+    await client.post("/api/auth/logout")
+    resp = await client.post(
+        "/api/auth/login", json={"email": "admin@eddyartgallery.app", "password": "super-secret-admin-1"}
+    )
+    assert resp.status_code == 401
+    resp = await client.post(
+        "/api/auth/login", json={"email": "admin-new@example.com", "password": "super-secret-admin-1"}
+    )
+    assert resp.status_code == 200
+
+
+async def test_admin_change_password_success_and_wrong_current_password(client, admin_user):
+    await _login_admin(client)
+
+    resp = await client.post(
+        "/api/auth/change-password", json={"currentPassword": "wrong-one", "newPassword": "brand-new-admin-1"}
+    )
+    assert resp.status_code == 401
+
+    resp = await client.post(
+        "/api/auth/change-password",
+        json={"currentPassword": "super-secret-admin-1", "newPassword": "brand-new-admin-1"},
+    )
+    assert resp.status_code == 200, resp.text
+
+    # Current session survives a password change.
+    resp = await client.get("/api/auth/me")
+    assert resp.status_code == 200
+
+    await client.post("/api/auth/logout")
+    resp = await client.post(
+        "/api/auth/login", json={"email": "admin@eddyartgallery.app", "password": "super-secret-admin-1"}
+    )
+    assert resp.status_code == 401
+    resp = await client.post(
+        "/api/auth/login", json={"email": "admin@eddyartgallery.app", "password": "brand-new-admin-1"}
+    )
+    assert resp.status_code == 200
+
+
+async def test_staff_can_also_manage_own_profile(client, admin_user, captured_emails):
+    # Staff accounts share the exact same endpoints as admin -- create one
+    # via the real invite/accept flow (not _create_user directly) so this
+    # also proves the endpoints work for a staff-created session, not just
+    # one seeded straight into the DB.
+    await _login_admin(client)
+    resp = await client.post("/api/auth/staff/invite", json={"name": "Sarah K", "email": "sarah@example.com"})
+    assert resp.status_code == 200, resp.text
+    invite_token = [e for e in captured_emails if e["kind"] == "invite"][0]["token"]
+    await client.post("/api/auth/logout")
+
+    resp = await client.post(
+        "/api/auth/staff/accept-invite", json={"token": invite_token, "password": "sarah-pass-1"}
+    )
+    assert resp.status_code == 200, resp.text
+
+    resp = await client.patch("/api/auth/me", json={"name": "Sarah Kim"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["role"] == "staff"
+    assert resp.json()["name"] == "Sarah Kim"
+
+    resp = await client.post(
+        "/api/auth/change-password", json={"currentPassword": "sarah-pass-1", "newPassword": "sarah-pass-2-new"}
+    )
+    assert resp.status_code == 200, resp.text

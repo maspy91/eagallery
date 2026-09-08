@@ -11,9 +11,11 @@
 		Images,
 		Video,
 		Users,
+		UserRound,
 		MessageSquareWarning,
 		MessageCircle,
 		Mail,
+		Settings,
 		ArrowLeft
 	} from '@lucide/svelte';
 	import type { LayoutData } from './$types';
@@ -27,7 +29,12 @@
 		{ href: '/admin/comments', label: 'Comments', icon: MessageSquareWarning, show: hasPermission(data.user, 'comments:moderate') },
 		{ href: '/admin/requests', label: 'Requests', icon: Mail, show: hasPermission(data.user, 'requests:respond') },
 		{ href: '/admin/chat', label: 'Live Chat', icon: MessageCircle, show: hasPermission(data.user, 'requests:respond') },
-		{ href: '/admin/roles', label: 'Roles & Staff', icon: Users, show: hasPermission(data.user, 'roles:manage') }
+		{ href: '/admin/customers', label: 'Customers', icon: UserRound, show: hasPermission(data.user, 'customers:manage') },
+		{ href: '/admin/roles', label: 'Roles & Staff', icon: Users, show: hasPermission(data.user, 'roles:manage') },
+		// Every admin/staff account can manage its own profile, regardless
+		// of role-based permissions -- unlike the items above, this one
+		// isn't gated by hasPermission at all.
+		{ href: '/admin/settings', label: 'Account Settings', icon: Settings, show: true }
 	].filter((n) => n.show);
 </script>
 

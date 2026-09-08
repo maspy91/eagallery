@@ -12,6 +12,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "comments:moderate",
         "requests:respond",
         "analytics:view",
+        "customers:manage",
     },
     "staff": {
         "photos:manage",

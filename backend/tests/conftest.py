@@ -84,6 +84,8 @@ def captured_emails(monkeypatch):
     token that would have been emailed, without a real mailbox."""
     import app.routers.admin_auth as admin_auth_module
     import app.routers.customer_auth as customer_auth_module
+    import app.routers.comments as comments_module
+    import app.routers.conversations as conversations_module
 
     sent: list[dict] = []
 
@@ -99,8 +101,39 @@ def captured_emails(monkeypatch):
         sent.append({"kind": "invite", "to": to_email, "token": token})
         return True
 
+    async def _fake_comment_reply(to_email: str, replier_name: str, media_title: str, href: str) -> bool:
+        sent.append(
+            {"kind": "comment_reply", "to": to_email, "replier_name": replier_name, "media_title": media_title, "href": href}
+        )
+        return True
+
+    async def _fake_conversation_reply(to_email: str, sender_name: str, subject: str, href: str) -> bool:
+        sent.append(
+            {"kind": "conversation_reply", "to": to_email, "sender_name": sender_name, "subject": subject, "href": href}
+        )
+        return True
+
+    async def _fake_quote_email(
+        to_email: str, sender_name: str, subject: str, amount_cents: int, currency: str, href: str
+    ) -> bool:
+        sent.append(
+            {
+                "kind": "quote",
+                "to": to_email,
+                "sender_name": sender_name,
+                "subject": subject,
+                "amount_cents": amount_cents,
+                "currency": currency,
+                "href": href,
+            }
+        )
+        return True
+
     monkeypatch.setattr(customer_auth_module, "send_verification_email", _fake_verification)
     monkeypatch.setattr(admin_auth_module, "send_password_reset_email", _fake_reset)
     monkeypatch.setattr(admin_auth_module, "send_staff_invite_email", _fake_invite)
+    monkeypatch.setattr(comments_module, "send_comment_reply_email", _fake_comment_reply)
+    monkeypatch.setattr(conversations_module, "send_conversation_reply_email", _fake_conversation_reply)
+    monkeypatch.setattr(conversations_module, "send_quote_email", _fake_quote_email)
 
     return sent

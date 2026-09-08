@@ -63,7 +63,7 @@
 	});
 </script>
 
-<svelte:head><title>My Conversations — EddyArt Gallery</title></svelte:head>
+<svelte:head><title>My Conversations — EddyArt</title></svelte:head>
 
 <div class="space-y-6">
 	<div>

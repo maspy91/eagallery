@@ -161,6 +161,41 @@ async def test_customer_cannot_manage_photos(client, customer_user):
     assert resp.status_code == 401
 
 
+async def test_photo_stats_counts_correctly_and_ignores_the_100_row_cap(client, admin_user):
+    """Regression test: the admin dashboard used to derive these numbers
+    from photosApi.list({limit: 100}), which silently undercounted past
+    100 photos. /api/photos/stats uses SQL COUNT/SUM instead, so it must
+    stay correct well past that cap."""
+    await _login_admin(client, admin_user)
+
+    # 3 published (with views/likes), 1 draft, 1 flagged -- draft doesn't
+    # count toward publishedCount, flagged counts toward flaggedCount but
+    # not publishedCount, and views/likes only sum the published ones'
+    # counters since only published photos accrue real views/likes in
+    # normal use.
+    ids = [await _upload_and_create_photo(client, title=f"Stat item {i}") for i in range(105)]
+    for photo_id in ids[:103]:
+        await client.patch(f"/api/photos/{photo_id}", json={"status": "published"})
+    await client.patch(f"/api/photos/{ids[103]}", json={"status": "flagged"})
+    # ids[104] left as draft
+
+    resp = await client.get("/api/photos/stats")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["publishedCount"] == 103
+    assert body["flaggedCount"] == 1
+    # totalViews/totalLikes start at 0 -- no views recorded here, just
+    # confirming the aggregate query runs and returns ints, not None.
+    assert body["totalViews"] == 0
+    assert body["totalLikes"] == 0
+
+
+async def test_photo_stats_requires_admin_or_staff(client, customer_user):
+    await _login_customer(client, customer_user)
+    resp = await client.get("/api/photos/stats")
+    assert resp.status_code == 401
+
+
 async def test_like_toggle(client, admin_user, customer_user):
     await _login_admin(client, admin_user)
     photo_id = await _upload_and_create_photo(client)
@@ -266,3 +301,137 @@ async def test_admin_staff_preview_does_not_count_as_a_view(client, admin_user):
     await client.post("/api/auth/logout")
     resp = await client.get(f"/api/photos/{photo_id}")
     assert resp.json()["viewCount"] == 1
+
+
+async def test_photo_meta_returns_og_fields_and_never_counts_a_view(client, admin_user):
+    """/meta exists specifically so a server-rendered Open Graph tag
+    fetch -- including hits from link-preview crawlers unfurling a
+    shared URL -- never inflates the public view count the way GET
+    /{photo_id} deliberately does."""
+    await _login_admin(client, admin_user)
+    photo_id = await _upload_and_create_photo(client, title="Neon Sign Prototype")
+    await client.patch(f"/api/photos/{photo_id}", json={"status": "published"})
+    await client.post("/api/auth/logout")
+
+    resp = await client.get(f"/api/photos/{photo_id}/meta")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["title"] == "Neon Sign Prototype"
+    assert "image" in body and body["image"]
+    assert "description" in body
+    assert "category" in body
+    assert "viewCount" not in body  # deliberately minimal, not PhotoOut
+
+    # Hit it several more times (simulating multiple crawlers/shares) --
+    # view count must stay at 0 throughout.
+    for _ in range(3):
+        await client.get(f"/api/photos/{photo_id}/meta")
+
+    resp = await client.get(f"/api/photos/{photo_id}")
+    # This is the real GET endpoint, not /meta -- it's SUPPOSED to record
+    # a view, so this should read exactly 1 (this one real hit), proving
+    # none of the four /meta calls above contributed anything.
+    assert resp.json()["viewCount"] == 1
+
+
+async def test_photo_meta_404s_for_draft_flagged_or_unknown(client, admin_user):
+    await _login_admin(client, admin_user)
+    draft_id = await _upload_and_create_photo(client, title="Still a draft")
+    await client.post("/api/auth/logout")
+
+    # Draft: never published, so /meta (a public endpoint) must not
+    # leak its existence or content -- same 404-not-403 reasoning as
+    # the real GET endpoint.
+    resp = await client.get(f"/api/photos/{draft_id}/meta")
+    assert resp.status_code == 404
+
+    resp = await client.get("/api/photos/does-not-exist/meta")
+    assert resp.status_code == 404
+
+
+# ============================================================
+# Search, date-range filtering, and CSV export
+# ============================================================
+
+
+async def test_search_matches_title_category_or_description(client, admin_user):
+    await _login_admin(client, admin_user)
+    id1 = await _upload_and_create_photo(client, title="Neon Shop Sign")
+    id2 = await _upload_and_create_photo(client, title="Engraved Trophy")
+    for photo_id in (id1, id2):
+        await client.patch(f"/api/photos/{photo_id}", json={"status": "published"})
+
+    resp = await client.get("/api/photos", params={"q": "neon"})
+    assert resp.status_code == 200, resp.text
+    titles = [p["title"] for p in resp.json()]
+    assert titles == ["Neon Shop Sign"]
+
+    # Also matches the (shared, for this helper) category text.
+    resp = await client.get("/api/photos", params={"q": "wearable"})
+    assert resp.status_code == 200, resp.text
+    assert len(resp.json()) == 2
+
+
+async def test_date_range_filters_by_created_at(client, admin_user):
+    from datetime import datetime, timedelta, timezone
+    from app.models.photo import Photo
+
+    await _login_admin(client, admin_user)
+    old_id = await _upload_and_create_photo(client, title="Old Item")
+    new_id = await _upload_and_create_photo(client, title="New Item")
+    for photo_id in (old_id, new_id):
+        await client.patch(f"/api/photos/{photo_id}", json={"status": "published"})
+
+    # Backdate old_id by 30 days directly -- there's no API to set
+    # created_at, and it's set server-side on creation regardless.
+    async with TestSessionLocal() as db:
+        photo = await db.get(Photo, old_id)
+        photo.created_at = datetime.now(timezone.utc) - timedelta(days=30)
+        await db.commit()
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    resp = await client.get("/api/photos", params={"date_from": today})
+    assert resp.status_code == 200, resp.text
+    titles = [p["title"] for p in resp.json()]
+    assert "New Item" in titles
+    assert "Old Item" not in titles
+
+    ten_days_ago = (datetime.now(timezone.utc).date() - timedelta(days=10)).isoformat()
+    resp = await client.get("/api/photos", params={"date_to": ten_days_ago})
+    assert resp.status_code == 200, resp.text
+    titles = [p["title"] for p in resp.json()]
+    assert "Old Item" in titles
+    assert "New Item" not in titles
+
+
+async def test_date_range_rejects_invalid_or_backwards_dates(client, admin_user):
+    await _login_admin(client, admin_user)
+
+    resp = await client.get("/api/photos", params={"date_from": "not-a-date"})
+    assert resp.status_code == 400
+
+    resp = await client.get("/api/photos", params={"date_from": "2026-06-01", "date_to": "2026-01-01"})
+    assert resp.status_code == 400
+
+
+async def test_export_csv_matches_filters_and_requires_manage_permission(client, admin_user, customer_user):
+    await _login_admin(client, admin_user)
+    id1 = await _upload_and_create_photo(client, title="Exportable Sign")
+    await client.patch(f"/api/photos/{id1}", json={"status": "published"})
+    id2 = await _upload_and_create_photo(client, title="Still Draft")
+    # id2 left as draft on purpose
+
+    resp = await client.get("/api/photos/export", params={"status": "published"})
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].startswith("text/csv")
+    assert "attachment" in resp.headers["content-disposition"]
+    body = resp.text
+    assert "Exportable Sign" in body
+    assert "Still Draft" not in body
+    # Header row present.
+    assert body.startswith("ID,Title,Category,Status,Views,Likes,Created At")
+
+    await client.post("/api/auth/logout")
+    await _login_customer(client, customer_user)
+    resp = await client.get("/api/photos/export")
+    assert resp.status_code == 401

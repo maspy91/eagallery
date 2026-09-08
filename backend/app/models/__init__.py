@@ -5,7 +5,7 @@
 from app.models.auth_token import AuthToken  # noqa: F401
 from app.models.chat import ChatThread, ChatMessage  # noqa: F401
 from app.models.comment import Comment  # noqa: F401
-from app.models.conversation import Conversation, ConversationMessage  # noqa: F401
+from app.models.conversation import Conversation, ConversationMessage, ConversationQuote  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
 from app.models.photo import Photo, PhotoLike, PhotoView  # noqa: F401
 from app.models.security_log import SecurityLog  # noqa: F401

@@ -4,6 +4,10 @@
 	import CommentSection from '$lib/components/CommentSection.svelte';
 	import { currentUser, authChecked } from '$lib/stores/auth';
 	import { videosApi, type ApiVideo } from '$lib/api';
+	import type { PageData } from './$types';
+
+	// See image/[id]/+page.server.ts's comments -- same reasoning, mirrored.
+	export let data: PageData;
 
 	// Mirrors src/routes/image/[id]/+page.svelte closely -- see that file
 	// for the reasoning behind the `$: if (id) load(id)` pattern and the
@@ -66,7 +70,21 @@
 </script>
 
 <svelte:head>
-	<title>{item ? `${item.title} — EddyArt Gallery` : 'Not found — EddyArt Gallery'}</title>
+	<title>{item?.title ?? data.meta?.title ? `${item?.title ?? data.meta?.title} — EddyArt` : 'Not found — EddyArt'}</title>
+	{#if data.meta}
+		<meta name="description" content={data.meta.description} />
+		<meta property="og:type" content="website" />
+		<meta property="og:title" content="{data.meta.title} — EddyArt" />
+		<meta property="og:description" content={data.meta.description} />
+		<!-- Not every video has a poster set -- fall back to the site logo
+		     so a share still gets a branded preview image instead of none. -->
+		<meta property="og:image" content={data.meta.image ?? `${$page.url.origin}/og-image.png`} />
+		<meta property="og:url" content={$page.url.href} />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content="{data.meta.title} — EddyArt" />
+		<meta name="twitter:description" content={data.meta.description} />
+		<meta name="twitter:image" content={data.meta.image ?? `${$page.url.origin}/og-image.png`} />
+	{/if}
 </svelte:head>
 
 {#if loading}

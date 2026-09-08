@@ -40,3 +40,7 @@ class AdminCommentOut(CommentOut):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class CommentCountOut(BaseModel):
+    count: int

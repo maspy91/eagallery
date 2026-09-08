@@ -43,6 +43,20 @@ class AcceptInviteRequest(BaseModel):
     password: str = Field(min_length=8, max_length=100)
 
 
+class UpdateProfileRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+
+
+class ChangeEmailRequest(BaseModel):
+    email: EmailStr
+    currentPassword: str = Field(min_length=1, max_length=100)
+
+
+class ChangePasswordRequest(BaseModel):
+    currentPassword: str = Field(min_length=1, max_length=100)
+    newPassword: str = Field(min_length=8, max_length=100)
+
+
 # ---- Responses ----
 
 class UserOut(BaseModel):

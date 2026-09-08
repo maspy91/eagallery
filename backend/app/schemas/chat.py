@@ -79,3 +79,7 @@ class AdminChatReplyIn(BaseModel):
 class AdminChatModeIn(BaseModel):
     mode: Literal["human", "ai"]  # admin can only ever pick up (-> human) or hand back (-> ai);
     # pending_admin is only ever set by the AI's own forward action, never chosen by an admin directly.
+
+
+class ChatQueueStatsOut(BaseModel):
+    waitingCount: int

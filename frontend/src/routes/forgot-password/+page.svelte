@@ -31,7 +31,7 @@
 </script>
 
 <svelte:head>
-	<title>Reset Password — EddyArt Gallery</title>
+	<title>Reset Password — EddyArt</title>
 </svelte:head>
 
 <div class="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-16">

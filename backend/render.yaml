@@ -24,7 +24,7 @@ services:
     healthCheckPath: /health
     envVars:
       - key: APP_NAME
-        value: EddyArt Gallery
+        value: EddyArt
       - key: DEBUG
         value: "False"
       - key: FRONTEND_URL
@@ -60,7 +60,7 @@ services:
       - key: SMTP_FROM_EMAIL
         value: noreply@eddyartgallery.app
       - key: SMTP_FROM_NAME
-        value: EddyArt Gallery
+        value: EddyArt
       - key: SMTP_USE_TLS
         value: "True"
       - key: R2_ACCOUNT_ID

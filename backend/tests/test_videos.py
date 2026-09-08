@@ -425,3 +425,188 @@ async def test_cannot_comment_on_draft_or_nonexistent_video(client, admin_user):
         assert resp.status_code == 404
     finally:
         await admin.aclose()
+
+
+async def test_video_stats_counts_correctly(admin_user, fake_storage):
+    """Mirrors test_photos.py's test_photo_stats_counts_correctly_and_ignores_the_100_row_cap
+    -- /api/videos/stats uses SQL COUNT/SUM instead of deriving these
+    numbers from a list() call, so it stays correct regardless of how
+    many videos exist."""
+    admin = await _admin_client()
+    try:
+        videos = [await _upload_video(admin, f"Stat clip {i}") for i in range(3)]
+        for v in videos[:2]:
+            resp = await admin.patch(f"/api/videos/{v['id']}", json={"status": "published"})
+            assert resp.status_code == 200, resp.text
+        resp = await admin.patch(f"/api/videos/{videos[2]['id']}", json={"status": "flagged"})
+        assert resp.status_code == 200, resp.text
+
+        resp = await admin.get("/api/videos/stats")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["publishedCount"] == 2
+        assert body["flaggedCount"] == 1
+        assert body["totalViews"] == 0
+        assert body["totalLikes"] == 0
+    finally:
+        await admin.aclose()
+
+
+async def test_video_stats_requires_admin_or_staff(customer_user, fake_storage):
+    customer = await _customer_client()
+    try:
+        resp = await customer.get("/api/videos/stats")
+        assert resp.status_code == 401
+    finally:
+        await customer.aclose()
+
+
+async def test_video_meta_returns_og_fields_and_never_counts_a_view(admin_user, fake_storage):
+    """Mirrors test_photos.py's equivalent -- /meta must never record a
+    view, even across repeated hits (simulating multiple crawlers)."""
+    admin = await _admin_client()
+    try:
+        video = await _upload_video(admin, "Neon Sign Clip")
+        resp = await admin.patch(f"/api/videos/{video['id']}", json={"status": "published"})
+        assert resp.status_code == 200, resp.text
+        await admin.post("/api/auth/logout")
+
+        anon = await _new_client()
+        resp = await anon.get(f"/api/videos/{video['id']}/meta")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["title"] == "Neon Sign Clip"
+        assert body["image"] is None  # this video has no poster
+        assert "viewCount" not in body
+
+        for _ in range(3):
+            await anon.get(f"/api/videos/{video['id']}/meta")
+
+        resp = await anon.get(f"/api/videos/{video['id']}")
+        # Same reasoning as the photos.py equivalent -- this real GET is
+        # supposed to record a view, so exactly 1 here proves the four
+        # /meta calls above contributed nothing.
+        assert resp.json()["viewCount"] == 1
+        await anon.aclose()
+    finally:
+        await admin.aclose()
+
+
+async def test_video_meta_returns_poster_when_set(admin_user, fake_storage):
+    admin = await _admin_client()
+    try:
+        resp = await admin.post(
+            "/api/videos/upload-url",
+            json={"filename": "demo.mp4", "content_type": "video/mp4", "size_bytes": 1_000_000, "duration_seconds": 5.0},
+        )
+        object_key = resp.json()["objectKey"]
+        resp = await admin.post(
+            "/api/videos",
+            json={
+                "objectKey": object_key, "posterObjectKey": "photos/fake-poster.jpg",
+                "title": "With poster", "category": "Product Demos",
+                "durationSeconds": 5.0, "mimeType": "video/mp4",
+            },
+        )
+        video_id = resp.json()["id"]
+        await admin.patch(f"/api/videos/{video_id}", json={"status": "published"})
+
+        resp = await admin.get(f"/api/videos/{video_id}/meta")
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["image"] is not None
+        assert "fake-poster.jpg" in resp.json()["image"]
+    finally:
+        await admin.aclose()
+
+
+async def test_video_meta_404s_for_draft_or_unknown(admin_user, fake_storage):
+    admin = await _admin_client()
+    try:
+        video = await _upload_video(admin, "Still a draft")
+        await admin.post("/api/auth/logout")
+
+        anon = await _new_client()
+        resp = await anon.get(f"/api/videos/{video['id']}/meta")
+        assert resp.status_code == 404
+
+        resp = await anon.get("/api/videos/does-not-exist/meta")
+        assert resp.status_code == 404
+        await anon.aclose()
+    finally:
+        await admin.aclose()
+
+
+# ============================================================
+# Search, date-range filtering, and CSV export
+# ============================================================
+
+
+async def test_video_search_matches_title_category_or_description(admin_user, fake_storage):
+    admin = await _admin_client()
+    try:
+        v1 = await _upload_video(admin, "Neon Sign Timelapse", category="Signage")
+        v2 = await _upload_video(admin, "Trophy Engraving Process", category="Awards")
+        for v in (v1, v2):
+            await admin.patch(f"/api/videos/{v['id']}", json={"status": "published"})
+
+        resp = await admin.get("/api/videos", params={"q": "neon"})
+        assert resp.status_code == 200, resp.text
+        assert [v["title"] for v in resp.json()] == ["Neon Sign Timelapse"]
+
+        resp = await admin.get("/api/videos", params={"q": "awards"})
+        assert resp.status_code == 200, resp.text
+        assert [v["title"] for v in resp.json()] == ["Trophy Engraving Process"]
+    finally:
+        await admin.aclose()
+
+
+async def test_video_date_range_filters_by_created_at(admin_user, fake_storage):
+    from datetime import datetime, timedelta, timezone
+    from app.models.video import Video
+
+    admin = await _admin_client()
+    try:
+        old_v = await _upload_video(admin, "Old Clip")
+        new_v = await _upload_video(admin, "New Clip")
+        for v in (old_v, new_v):
+            await admin.patch(f"/api/videos/{v['id']}", json={"status": "published"})
+
+        async with TestSessionLocal() as db:
+            video = await db.get(Video, old_v["id"])
+            video.created_at = datetime.now(timezone.utc) - timedelta(days=30)
+            await db.commit()
+
+        today = datetime.now(timezone.utc).date().isoformat()
+        resp = await admin.get("/api/videos", params={"date_from": today})
+        assert resp.status_code == 200, resp.text
+        titles = [v["title"] for v in resp.json()]
+        assert "New Clip" in titles
+        assert "Old Clip" not in titles
+    finally:
+        await admin.aclose()
+
+
+async def test_video_export_csv_matches_filters_and_requires_manage_permission(admin_user, customer_user, fake_storage):
+    admin = await _admin_client()
+    try:
+        published = await _upload_video(admin, "Exportable Clip")
+        await admin.patch(f"/api/videos/{published['id']}", json={"status": "published"})
+        await _upload_video(admin, "Still Draft Clip")
+
+        resp = await admin.get("/api/videos/export", params={"status": "published"})
+        assert resp.status_code == 200, resp.text
+        assert resp.headers["content-type"].startswith("text/csv")
+        assert "attachment" in resp.headers["content-disposition"]
+        body = resp.text
+        assert "Exportable Clip" in body
+        assert "Still Draft Clip" not in body
+        assert body.startswith("ID,Title,Category,Status,Views,Likes,Created At")
+    finally:
+        await admin.aclose()
+
+    customer = await _customer_client()
+    try:
+        resp = await customer.get("/api/videos/export")
+        assert resp.status_code == 401
+    finally:
+        await customer.aclose()

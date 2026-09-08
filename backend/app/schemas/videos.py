@@ -76,3 +76,23 @@ class LikeResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class VideoMetaOut(BaseModel):
+    """Mirrors PhotoMetaOut in schemas/photos.py exactly -- deliberately
+    minimal and view-count-free, used only for Open Graph tags."""
+
+    title: str
+    description: str
+    image: str | None  # the poster still, or None if the video has no poster set
+    category: str
+
+
+class VideoStatsOut(BaseModel):
+    """Aggregate counts for the admin dashboard, computed with SQL
+    COUNT/SUM -- mirrors PhotoStatsOut in schemas/photos.py exactly."""
+
+    publishedCount: int
+    totalViews: int
+    totalLikes: int
+    flaggedCount: int

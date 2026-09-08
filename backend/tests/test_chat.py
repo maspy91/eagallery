@@ -386,3 +386,56 @@ async def test_chat_rate_limited(monkeypatch, configured_ai):
         assert resp.status_code == 429
     finally:
         await client.aclose()
+
+
+# ============================================================
+# Handoff queue stats -- admin dashboard overview count
+# ============================================================
+
+
+async def test_chat_queue_stats_counts_only_pending_admin_not_ai_or_human(admin_user, configured_ai):
+    """The count that matters for the admin dashboard overview is
+    threads waiting for a human to pick up -- 'pending_admin' -- not
+    threads the AI is still handling on its own ('ai') and not threads
+    someone already claimed ('human'), which would inflate an urgency
+    number with things that don't actually need attention."""
+    from app.routers.chat import FORWARD_MARKER
+
+    ai_only_client = await _new_client()
+    waiting_client = await _new_client()
+    claimed_client = await _new_client()
+    admin = await _admin_client()
+    try:
+        # Stays in 'ai' mode -- shouldn't count.
+        await ai_only_client.post("/api/chat", json={"text": "just browsing, thanks"})
+
+        # Forwarded, nobody's picked it up yet -- should count.
+        configured_ai["set_reply"](f"Connecting you. {FORWARD_MARKER}")
+        await waiting_client.post("/api/chat", json={"text": "custom project inquiry"})
+
+        # Forwarded AND picked up by an admin -- should NOT count, someone's already on it.
+        resp = await claimed_client.post("/api/chat", json={"text": "another custom project"})
+        claimed_thread_id = resp.json()["threadId"]
+        resp = await admin.post(
+            f"/api/admin/chat/threads/{claimed_thread_id}/reply", json={"text": "Happy to help!"}
+        )
+        assert resp.status_code == 200
+        assert resp.json()["mode"] == "human"
+
+        resp = await admin.get("/api/admin/chat/stats")
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["waitingCount"] == 1
+    finally:
+        await ai_only_client.aclose()
+        await waiting_client.aclose()
+        await claimed_client.aclose()
+        await admin.aclose()
+
+
+async def test_chat_queue_stats_requires_admin_or_staff(customer_user):
+    customer = await _customer_client()
+    try:
+        resp = await customer.get("/api/admin/chat/stats")
+        assert resp.status_code == 401
+    finally:
+        await customer.aclose()

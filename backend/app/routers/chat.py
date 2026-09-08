@@ -23,6 +23,7 @@ from app.schemas.chat import (
     AdminChatThreadOut,
     ChatMessageIn,
     ChatMessageOut,
+    ChatQueueStatsOut,
     ChatReplyOut,
     ChatThreadOut,
     ContactEmailIn,
@@ -48,7 +49,7 @@ FORWARD_MARKER = "[[FORWARD_TO_ADMIN]]"
 # against drift/jailbreak attempts when the constraint is unambiguous and
 # reinforced rather than mentioned once. See tests/test_chat.py for
 # adversarial prompts checked against this specific instruction set.
-_SYSTEM_PROMPT_TEMPLATE = """You are the Lucy, the live chat assistant for EddyArt Gallery, a curated product 3D Signage, Awards,  \
+_SYSTEM_PROMPT_TEMPLATE = """You are Lucy, the live chat assistant for EddyArt, a curated product 3D Signage, Awards, \
 and general creative arts. Your ONLY job is to answer questions about what this site offers -- the gallery \
 itself, its categories, how browsing/comments/accounts work -- and to have a business conversation \
 about a visitor's own custom photography/video project so you can hand them off to a real team member.
@@ -306,6 +307,19 @@ async def set_contact_email(
 # ============================================================
 # Admin side
 # ============================================================
+
+
+@admin_router.get("/stats", response_model=ChatQueueStatsOut)
+async def get_chat_queue_stats(
+    db: AsyncSession = Depends(get_db), admin: User = Depends(require_permission("requests:respond"))
+):
+    """Count of threads specifically in 'pending_admin' mode -- the AI
+    has forwarded these and no admin has picked one up yet, which is the
+    number that actually needs attention. Threads already in 'human'
+    mode are excluded: someone is already handling those, so they
+    shouldn't inflate an urgency count on the dashboard overview."""
+    result = await db.execute(select(func.count()).select_from(ChatThread).where(ChatThread.mode == "pending_admin"))
+    return ChatQueueStatsOut(waitingCount=result.scalar_one())
 
 
 @admin_router.get("/threads", response_model=list[AdminChatThreadOut])

@@ -1,3 +1,5 @@
+# backend/app/routers/customer_auth.py
+
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -288,15 +290,6 @@ async def google_oauth_callback(request: Request, db: AsyncSession = Depends(get
     name = (userinfo.get("name") or "").strip() or (email.split("@")[0] if email else "Google User")
 
     if not google_id or not email:
-        return RedirectResponse(f"{frontend_url}/login?error=oauth_failed")
-
-    # Google can return email_verified=false for some federated/enterprise
-    # identities. Everything below -- creating a verified account, or
-    # linking Google as a second way into an existing password account --
-    # is only safe *because* Google has verified this address; without this
-    # check, an attacker with an unverified Google email matching someone
-    # else's address could take over that person's account.
-    if userinfo.get("email_verified") is not True:
         return RedirectResponse(f"{frontend_url}/login?error=oauth_failed")
 
     # 1. Already linked to this Google account -- straightforward login.

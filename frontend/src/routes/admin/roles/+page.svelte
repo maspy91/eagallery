@@ -24,8 +24,16 @@
 		name: string;
 		role: 'admin' | 'staff' | 'customer';
 		avatarInitials: string;
+		emailVerified: boolean;
 	}): AppUser {
-		return { id: u.id, email: u.email, name: u.name, role: u.role, avatarInitials: u.avatarInitials };
+		return {
+			id: u.id,
+			email: u.email,
+			name: u.name,
+			role: u.role,
+			avatarInitials: u.avatarInitials,
+			emailVerified: u.emailVerified
+		};
 	}
 
 	async function loadStaff() {
@@ -74,7 +82,7 @@
 	}
 </script>
 
-<svelte:head><title>Roles & Staff — EddyArt Gallery Admin</title></svelte:head>
+<svelte:head><title>Roles & Staff — EddyArt Admin</title></svelte:head>
 
 <div class="space-y-6">
 	<div>

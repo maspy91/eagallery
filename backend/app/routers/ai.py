@@ -24,7 +24,7 @@ DESCRIBE_MAX_MEDIA_BYTES = 5 * 1024 * 1024  # matches MAX_VIDEO_SIZE_BYTES; phot
 # original -- see the docstring on describe_media below.
 
 DESCRIBE_SYSTEM_INSTRUCTION = """You are helping an admin write a product gallery listing for a photography/video \
-gallery e-commerce site called EddyArt Gallery. You will be shown one photo or a short video of a product. \
+gallery e-commerce site called EddyArt. You will be shown one photo or a short video of a product. \
 Write a concise, appealing, factual gallery listing for it.
 
 Respond with EXACTLY three sections, each on its own line, in this format and nothing else:

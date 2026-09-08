@@ -42,3 +42,27 @@ export const resetPasswordSchema = z
 		message: 'Passwords do not match',
 		path: ['confirmPassword']
 	});
+
+export const updateNameSchema = z.object({
+	name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100)
+});
+
+export const changeEmailSchema = z.object({
+	email: emailSchema,
+	currentPassword: loginPasswordSchema
+});
+
+export const changePasswordSchema = z
+	.object({
+		currentPassword: loginPasswordSchema,
+		newPassword: passwordSchema,
+		confirmNewPassword: z.string()
+	})
+	.refine((data) => data.newPassword === data.confirmNewPassword, {
+		message: 'Passwords do not match',
+		path: ['confirmNewPassword']
+	})
+	.refine((data) => data.currentPassword !== data.newPassword, {
+		message: 'New password must be different from your current password',
+		path: ['newPassword']
+	});

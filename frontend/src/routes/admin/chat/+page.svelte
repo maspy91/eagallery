@@ -93,7 +93,7 @@
 	}
 </script>
 
-<svelte:head><title>Live Chat — EddyArt Gallery Admin</title></svelte:head>
+<svelte:head><title>Live Chat — EddyArt Admin</title></svelte:head>
 
 <div class="space-y-6">
 	<div>

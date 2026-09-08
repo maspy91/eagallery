@@ -1,3 +1,5 @@
+# backend/app/core/redis.py
+
 import redis.asyncio as redis
 from app.core.config import get_settings
 

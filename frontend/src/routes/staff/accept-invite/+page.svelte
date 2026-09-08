@@ -36,7 +36,7 @@
 </script>
 
 <svelte:head>
-	<title>Accept Invite — EddyArt Gallery</title>
+	<title>Accept Invite — EddyArt</title>
 </svelte:head>
 
 <div class="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-16">

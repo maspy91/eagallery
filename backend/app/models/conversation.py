@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
 
 from app.core.database import Base
 
@@ -54,3 +54,38 @@ class ConversationMessage(Base):
 
     text = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ConversationQuote(Base):
+    """A lightweight, non-payment-processing quote attached to one
+    conversation -- gives a business request a trackable, closeable
+    outcome (accepted/declined) instead of staying an open-ended chat
+    forever. Deliberately NOT an invoice or payment record: there's no
+    payment gateway integration here, just a priced offer the customer
+    can accept or decline. Actual payment still happens off-platform,
+    same as it always has.
+
+    created_by_name is a snapshot (same reasoning as
+    Conversation.customer_name) -- a staff member's later name change or
+    departure shouldn't rewrite a quote's history.
+
+    A conversation can have more than one quote over time (e.g. a
+    revised quote after the first is declined) -- there's no
+    one-quote-per-conversation constraint."""
+
+    __tablename__ = "conversation_quotes"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    conversation_id = Column(String(36), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_by_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by_name = Column(String(100), nullable=False)
+
+    description = Column(Text, nullable=False)
+    amount_cents = Column(Integer, nullable=False)
+    currency = Column(String(3), nullable=False, default="NGN")
+
+    # pending | accepted | declined | withdrawn
+    status = Column(String(20), nullable=False, default="pending", index=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    responded_at = Column(DateTime(timezone=True), nullable=True)

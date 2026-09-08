@@ -22,8 +22,10 @@
 
 <header class="sticky top-0 z-50 glass border-b border-border/40">
 	<div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
-		<a href="/" class="text-xl font-bold text-gradient shrink-0">
-			EddyArt Gallery
+		<a href="/" class="shrink-0 flex items-center" aria-label="EddyArts — World Of Creativity">
+			<span class="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+				Eddy<span class="text-primary">Arts</span>
+			</span>
 		</a>
 
 		<!-- Desktop nav -->

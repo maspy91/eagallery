@@ -1,4 +1,4 @@
-# EddyArt Gallery — SvelteKit frontend (Phase 2: auth + photo management wired to FastAPI)
+# EddyArt — SvelteKit frontend (Phase 2: auth + photo management wired to FastAPI)
 
 SvelteKit conversion of the original React/Vite draft. Phase 1 was UI-only on
 mock data. Phase 2 wires real authentication/authorization and **real photo

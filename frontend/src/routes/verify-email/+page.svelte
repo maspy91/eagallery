@@ -26,7 +26,7 @@
 </script>
 
 <svelte:head>
-	<title>Verify Email — EddyArt Gallery</title>
+	<title>Verify Email — EddyArt</title>
 </svelte:head>
 
 <div class="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-16">

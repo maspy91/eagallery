@@ -1,4 +1,4 @@
-# Deploying EddyArt Gallery — Render (backend) + Vercel (frontend)
+# Deploying EddyArt — Render (backend) + Vercel (frontend)
 
 This covers: provisioning Neon/Upstash, deploying the backend to Render,
 deploying the frontend to Vercel, and testing the whole auth system back to

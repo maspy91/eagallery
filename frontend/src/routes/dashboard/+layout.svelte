@@ -8,7 +8,7 @@
 
 	import { page } from '$app/stores';
 	import { unreadCount as unreadCountStore } from '$lib/stores/notifications';
-	import { LayoutDashboard, Bell, Inbox, MessagesSquare, ArrowLeft } from '@lucide/svelte';
+	import { LayoutDashboard, Bell, Inbox, MessagesSquare, Settings, ArrowLeft } from '@lucide/svelte';
 	import type { LayoutData } from './$types';
 
 	export let data: LayoutData;
@@ -17,7 +17,8 @@
 		{ href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
 		{ href: '/dashboard/notifications', label: 'Notifications', icon: Bell, badge: $unreadCountStore },
 		{ href: '/dashboard/inbox', label: 'Inbox', icon: Inbox },
-		{ href: '/dashboard/conversations', label: 'My Conversations', icon: MessagesSquare }
+		{ href: '/dashboard/conversations', label: 'My Conversations', icon: MessagesSquare },
+		{ href: '/dashboard/settings', label: 'Account Settings', icon: Settings }
 	];
 </script>
 

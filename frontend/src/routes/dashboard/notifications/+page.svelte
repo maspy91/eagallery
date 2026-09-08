@@ -18,7 +18,7 @@
 	const icon = { comment_reply: MessageCircle, conversation_reply: MessagesSquare, system: Info };
 </script>
 
-<svelte:head><title>Notifications — EddyArt Gallery</title></svelte:head>
+<svelte:head><title>Notifications — EddyArt</title></svelte:head>
 
 <div class="space-y-6">
 	<div class="flex items-center justify-between flex-wrap gap-4">

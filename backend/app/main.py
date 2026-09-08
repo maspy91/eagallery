@@ -11,7 +11,7 @@ from app.core.database import Base, engine
 from app.core.model_registry import discover_models
 from app.core.redis import redis_client
 from app.core.storage import ensure_bucket
-from app.routers import admin_auth, ai, chat, comments, conversations, customer_auth, notifications, photos, videos
+from app.routers import admin_auth, ai, chat, comments, conversations, customer_auth, customers, notifications, photos, videos
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -93,6 +93,7 @@ app.add_middleware(
 
 app.include_router(customer_auth.router)
 app.include_router(admin_auth.router)
+app.include_router(customers.router)
 app.include_router(photos.router)
 app.include_router(videos.router)
 app.include_router(comments.photo_comments_router)

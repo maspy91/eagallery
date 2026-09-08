@@ -4,6 +4,24 @@
 	import { Send, Plus, MessagesSquare, LoaderCircle } from '@lucide/svelte';
 	import { currentUser } from '$lib/stores/auth';
 	import { conversationsApi, ApiError, type ApiConversation } from '$lib/api';
+	import QuoteCard from '$lib/components/QuoteCard.svelte';
+
+	type TimelineItem =
+		| { kind: 'message'; timestamp: string; message: ApiConversation['messages'][number] }
+		| { kind: 'quote'; timestamp: string; quote: ApiConversation['quotes'][number] };
+
+	function buildTimeline(c: ApiConversation): TimelineItem[] {
+		const items: TimelineItem[] = [
+			...c.messages.map((m) => ({ kind: 'message' as const, timestamp: m.timestamp, message: m })),
+			...c.quotes.map((q) => ({ kind: 'quote' as const, timestamp: q.createdAt, quote: q }))
+		];
+		return items.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+	}
+
+	function handleUpdated(updated: ApiConversation) {
+		conversations = conversations.map((c) => (c.id === updated.id ? updated : c));
+		selected = updated;
+	}
 
 	let conversations: ApiConversation[] = [];
 	let loading = true;
@@ -75,8 +93,7 @@
 		formError = '';
 		try {
 			const updated = await conversationsApi.reply(selected.id, reply.trim());
-			conversations = conversations.map((c) => (c.id === updated.id ? updated : c));
-			selected = updated;
+			handleUpdated(updated);
 			reply = '';
 		} catch (err) {
 			formError = err instanceof ApiError ? err.message : 'Could not send your reply.';
@@ -86,7 +103,7 @@
 	}
 </script>
 
-<svelte:head><title>Inbox — EddyArt Gallery</title></svelte:head>
+<svelte:head><title>Inbox — EddyArt</title></svelte:head>
 
 <div class="space-y-6">
 	<div class="flex items-center justify-between flex-wrap gap-4">
@@ -177,20 +194,26 @@
 				</div>
 
 				<div class="space-y-4 max-h-[420px] overflow-y-auto pr-1">
-					{#each selected.messages as m (m.id)}
-						<div class="flex {m.senderRole === 'customer' ? 'justify-end' : 'justify-start'}">
-							<div
-								class="max-w-[80%] rounded-xl px-4 py-2.5 text-sm {m.senderRole === 'customer'
-									? 'bg-primary text-primary-foreground'
-									: 'bg-muted text-foreground'}"
-							>
-								{#if m.senderRole !== 'customer'}
-									<p class="text-xs font-semibold mb-0.5 opacity-80">{m.senderName} · Team</p>
-								{/if}
-								<p>{m.text}</p>
-								<p class="text-[10px] opacity-70 mt-1">{new Date(m.timestamp).toLocaleString()}</p>
+					{#each buildTimeline(selected) as item (item.kind === 'message' ? item.message.id : item.quote.id)}
+						{#if item.kind === 'message'}
+							<div class="flex {item.message.senderRole === 'customer' ? 'justify-end' : 'justify-start'}">
+								<div
+									class="max-w-[80%] rounded-xl px-4 py-2.5 text-sm {item.message.senderRole === 'customer'
+										? 'bg-primary text-primary-foreground'
+										: 'bg-muted text-foreground'}"
+								>
+									{#if item.message.senderRole !== 'customer'}
+										<p class="text-xs font-semibold mb-0.5 opacity-80">{item.message.senderName} · Team</p>
+									{/if}
+									<p>{item.message.text}</p>
+									<p class="text-[10px] opacity-70 mt-1">{new Date(item.message.timestamp).toLocaleString()}</p>
+								</div>
 							</div>
-						</div>
+						{:else}
+							<div class="flex justify-start">
+								<QuoteCard quote={item.quote} conversationId={selected.id} role="customer" onUpdated={handleUpdated} />
+							</div>
+						{/if}
 					{/each}
 				</div>
 

@@ -62,3 +62,30 @@ class LikeResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class PhotoMetaOut(BaseModel):
+    """Deliberately minimal, separate from PhotoOut -- used only to
+    populate Open Graph / social-preview tags server-side. GET /{id}
+    (PhotoOut) records a view on every call; this one must not, since
+    it's fetched on every server-rendered page load INCLUDING hits from
+    link-preview crawlers (Facebook/WhatsApp/Twitter bots unfurling a
+    shared link), which would otherwise inflate the public view count
+    with bot traffic rather than real visitors."""
+
+    title: str
+    description: str
+    image: str
+    category: str
+
+
+class PhotoStatsOut(BaseModel):
+    """Aggregate counts for the admin dashboard, computed with SQL
+    COUNT/SUM rather than fetching rows -- accurate regardless of how
+    many photos exist, unlike deriving these from a capped list()
+    call."""
+
+    publishedCount: int
+    totalViews: int
+    totalLikes: int
+    flaggedCount: int

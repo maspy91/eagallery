@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import get_settings
+from app.core.csv_export import EXPORT_ROW_LIMIT, csv_response, parse_date_range
 from app.core.database import get_db
 from app.core.deps import (
     get_current_customer,
@@ -22,7 +23,9 @@ from app.schemas.videos import (
     LikeResponse,
     MessageResponse,
     VideoCreateRequest,
+    VideoMetaOut,
     VideoOut,
+    VideoStatsOut,
     VideoUpdateRequest,
     VideoUploadUrlRequest,
     VideoUploadUrlResponse,
@@ -178,18 +181,16 @@ async def create_video(
 # ---- Read (public, with more visible to staff/admin) ----
 
 
-@router.get("", response_model=list[VideoOut])
-async def list_videos(
-    db: AsyncSession = Depends(get_db),
-    viewer: User | None = Depends(get_optional_customer),
-    staff_viewer: User | None = Depends(get_optional_staff_or_admin),
-    status_filter: str | None = Query(default=None, alias="status"),
-    category: str | None = Query(default=None),
-    random: int | None = Query(default=None, ge=1, le=100, description="Return this many videos in random order"),
-    limit: int = Query(default=50, ge=1, le=100),
+def _apply_video_filters(
+    query,
+    *,
+    staff_viewer: User | None,
+    status_filter: str | None,
+    category: str | None,
+    q: str | None,
+    date_from: str | None,
+    date_to: str | None,
 ):
-    query = select(Video)
-
     if staff_viewer is not None:
         if status_filter:
             if status_filter not in VALID_STATUSES:
@@ -201,6 +202,42 @@ async def list_videos(
     if category:
         query = query.where(Video.category == category)
 
+    if q:
+        like = f"%{q}%"
+        query = query.where(or_(Video.title.ilike(like), Video.category.ilike(like), Video.description.ilike(like)))
+
+    parsed_from, parsed_to = parse_date_range(date_from, date_to)
+    if parsed_from:
+        query = query.where(Video.created_at >= parsed_from)
+    if parsed_to:
+        query = query.where(Video.created_at <= parsed_to)
+
+    return query
+
+
+@router.get("", response_model=list[VideoOut])
+async def list_videos(
+    db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_optional_customer),
+    staff_viewer: User | None = Depends(get_optional_staff_or_admin),
+    status_filter: str | None = Query(default=None, alias="status"),
+    category: str | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=255, description="Search by title, category, or description"),
+    date_from: str | None = Query(default=None, description="YYYY-MM-DD, inclusive"),
+    date_to: str | None = Query(default=None, description="YYYY-MM-DD, inclusive"),
+    random: int | None = Query(default=None, ge=1, le=100, description="Return this many videos in random order"),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    query = _apply_video_filters(
+        select(Video),
+        staff_viewer=staff_viewer,
+        status_filter=status_filter,
+        category=category,
+        q=q,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
     if random:
         query = query.order_by(func.random()).limit(random)
     else:
@@ -210,6 +247,90 @@ async def list_videos(
     videos = result.scalars().all()
 
     return [await _video_out(db, v, viewer) for v in videos]
+
+
+@router.get("/export")
+async def export_videos(
+    db: AsyncSession = Depends(get_db),
+    staff: User = Depends(require_permission("photos:manage")),
+    status_filter: str | None = Query(default=None, alias="status"),
+    category: str | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=255),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
+):
+    """CSV of videos matching the same filters as the list endpoint.
+    Gated by photos:manage, not a separate videos:manage permission --
+    matches every other video-management endpoint in this router, which
+    all reuse photos:manage rather than defining their own."""
+    query = _apply_video_filters(
+        select(Video),
+        staff_viewer=staff,
+        status_filter=status_filter,
+        category=category,
+        q=q,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    query = query.order_by(Video.created_at.desc()).limit(EXPORT_ROW_LIMIT)
+
+    result = await db.execute(query)
+    videos = result.scalars().all()
+
+    rows = (
+        [
+            v.id,
+            v.title,
+            v.category,
+            v.status,
+            str(v.view_count),
+            str(v.like_count),
+            v.created_at.isoformat() if v.created_at else "",
+        ]
+        for v in videos
+    )
+    return csv_response(
+        "videos.csv", ["ID", "Title", "Category", "Status", "Views", "Likes", "Created At"], rows
+    )
+
+
+@router.get(
+    "/stats",
+    response_model=VideoStatsOut,
+    dependencies=[Depends(require_permission("analytics:view"))],
+)
+async def get_video_stats(db: AsyncSession = Depends(get_db)):
+    """Single aggregate query -- mirrors get_photo_stats in
+    routers/photos.py exactly, same reasoning: correct no matter how
+    many videos exist, unlike deriving these from a list() call."""
+    result = await db.execute(
+        select(
+            func.count().filter(Video.status == "published"),
+            func.coalesce(func.sum(Video.view_count), 0),
+            func.coalesce(func.sum(Video.like_count), 0),
+            func.count().filter(Video.status == "flagged"),
+        )
+    )
+    published_count, total_views, total_likes, flagged_count = result.one()
+    return VideoStatsOut(
+        publishedCount=published_count,
+        totalViews=total_views,
+        totalLikes=total_likes,
+        flaggedCount=flagged_count,
+    )
+
+
+@router.get("/{video_id}/meta", response_model=VideoMetaOut)
+async def get_video_meta(video_id: str, db: AsyncSession = Depends(get_db)):
+    """Public, view-count-free. See VideoMetaOut's docstring / the
+    matching photos.py endpoint for why this exists separately."""
+    result = await db.execute(select(Video).where(Video.id == video_id))
+    video = result.scalar_one_or_none()
+    if not video or video.status != "published":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Video not found")
+
+    poster = public_url(video.poster_object_key) if video.poster_object_key else None
+    return VideoMetaOut(title=video.title, description=video.description, image=poster, category=video.category)
 
 
 @router.get("/{video_id}", response_model=VideoOut)

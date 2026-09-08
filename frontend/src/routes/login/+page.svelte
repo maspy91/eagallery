@@ -63,7 +63,7 @@
 </script>
 
 <svelte:head>
-	<title>Sign In — EddyArt Gallery</title>
+	<title>Sign In — EddyArt</title>
 </svelte:head>
 
 <div class="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-16">

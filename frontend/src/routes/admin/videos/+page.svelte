@@ -2,7 +2,13 @@
 	import { onMount } from 'svelte';
 	import { Upload, Pencil, Trash2, Eye, Heart, LoaderCircle, X, Image as ImageIcon, Sparkles } from '@lucide/svelte';
 	import { videosApi, photosApi, aiApi, type ApiVideo, ApiError } from '$lib/api';
+	import AdminListControls from '$lib/components/AdminListControls.svelte';
 	import { PUBLIC_MAX_VIDEO_SIZE_MB, PUBLIC_MAX_VIDEO_DURATION_SECONDS } from '$env/static/public';
+
+	let search = '';
+	let dateFrom = '';
+	let dateTo = '';
+	$: exportHref = videosApi.exportUrl({ q: search, date_from: dateFrom, date_to: dateTo });
 
 	// These mirror the backend's real limits (settings.MAX_VIDEO_SIZE_BYTES /
 	// MAX_VIDEO_DURATION_SECONDS) purely so this page can reject an obviously
@@ -77,7 +83,7 @@
 		loading = true;
 		listError = '';
 		try {
-			items = await videosApi.list({ limit: 100 });
+			items = await videosApi.list({ limit: 100, q: search, date_from: dateFrom, date_to: dateTo });
 		} catch (err) {
 			listError = err instanceof ApiError ? err.message : 'Could not load videos.';
 		} finally {
@@ -269,7 +275,7 @@
 	}
 </script>
 
-<svelte:head><title>Videos — EddyArt Gallery Admin</title></svelte:head>
+<svelte:head><title>Videos — EddyArt Admin</title></svelte:head>
 
 <div class="space-y-6">
 	<div class="flex items-center justify-between flex-wrap gap-4">
@@ -299,6 +305,8 @@
 			{/if}
 		</div>
 	</div>
+
+	<AdminListControls bind:search bind:dateFrom bind:dateTo {exportHref} searchPlaceholder="Search by title, category, or description…" onChange={loadVideos} />
 
 	<div class="glass elevated rounded-xl overflow-hidden">
 		{#if loading}

@@ -82,7 +82,16 @@ export const customerApi = {
 	logout: () => post<MessageResponse>('/api/customer/logout', {}),
 	me: () => get<ApiUser>('/api/customer/me'),
 	verifyEmail: (token: string) => post<ApiUser>('/api/customer/verify-email', { token }),
-	resendVerification: (email: string) => post<MessageResponse>('/api/customer/resend-verification', { email })
+	resendVerification: (email: string) => post<MessageResponse>('/api/customer/resend-verification', { email }),
+	updateProfile: (name: string) =>
+		request<ApiUser>('/api/customer/me', { method: 'PATCH', body: JSON.stringify({ name }) }),
+	// Sets emailVerified back to false and sends a fresh verification
+	// link to the new address -- same reasoning as registration, an
+	// unproven email shouldn't count as verified.
+	changeEmail: (email: string, currentPassword: string) =>
+		post<ApiUser>('/api/customer/change-email', { email, currentPassword }),
+	changePassword: (currentPassword: string, newPassword: string) =>
+		post<MessageResponse>('/api/customer/change-password', { currentPassword, newPassword })
 };
 
 // ---- Admin / staff auth (/api/auth/*) ----
@@ -96,7 +105,15 @@ export const adminApi = {
 	acceptInvite: (token: string, password: string) =>
 		post<ApiUser>('/api/auth/staff/accept-invite', { token, password }),
 	listStaff: () => get<ApiUser[]>('/api/auth/staff'),
-	revokeStaff: (id: string) => del<MessageResponse>(`/api/auth/staff/${id}`)
+	revokeStaff: (id: string) => del<MessageResponse>(`/api/auth/staff/${id}`),
+	updateProfile: (name: string) =>
+		request<ApiUser>('/api/auth/me', { method: 'PATCH', body: JSON.stringify({ name }) }),
+	// Unlike the customer side, admin/staff login never checks
+	// emailVerified, so this takes effect immediately -- no reverification step.
+	changeEmail: (email: string, currentPassword: string) =>
+		post<ApiUser>('/api/auth/change-email', { email, currentPassword }),
+	changePassword: (currentPassword: string, newPassword: string) =>
+		post<MessageResponse>('/api/auth/change-password', { currentPassword, newPassword })
 };
 
 // ---- Shared password recovery (/api/auth/*) ----
@@ -125,6 +142,9 @@ export interface ApiPhoto {
 export interface PhotoListParams {
 	status?: 'draft' | 'published' | 'flagged';
 	category?: string;
+	q?: string;
+	date_from?: string;
+	date_to?: string;
 	random?: number;
 	limit?: number;
 }
@@ -144,9 +164,37 @@ function buildQuery(params: Record<string, string | number | undefined>): string
 	return qs ? `?${qs}` : '';
 }
 
+export interface PhotoStats {
+	publishedCount: number;
+	totalViews: number;
+	totalLikes: number;
+	flaggedCount: number;
+}
+
+// Shared by resources whose search is just "q, date_from, date_to" with
+// no resource-specific filters of their own (comments, conversations) --
+// photos/videos/customers each have their own extra fields (status,
+// category, is_active) so they keep their own *ListParams interfaces
+// instead of using this.
+export interface ListFilterParams {
+	q?: string;
+	date_from?: string;
+	date_to?: string;
+}
+
 export const photosApi = {
 	list: (params: PhotoListParams = {}) => get<ApiPhoto[]>(`/api/photos${buildQuery({ ...params })}`),
+	// Not a fetch -- returns the URL itself, meant for a plain <a href>
+	// download link so the browser's normal same-origin cookie handling
+	// takes care of auth, and the CSV streams straight to disk instead
+	// of round-tripping through JS.
+	exportUrl: (params: PhotoListParams = {}) => `/api/photos/export${buildQuery({ ...params })}`,
 	get: (id: string) => get<ApiPhoto>(`/api/photos/${id}`),
+	// Real SQL COUNT/SUM aggregate (admin/staff, analytics:view only) --
+	// use this for dashboard totals instead of deriving them from
+	// list(), which is capped at 100 rows and will silently undercount
+	// a larger gallery.
+	stats: () => get<PhotoStats>('/api/photos/stats'),
 	getUploadUrl: (filename: string, contentType: string) =>
 		post<{ objectKey: string; uploadUrl: string; publicUrl: string }>('/api/photos/upload-url', {
 			filename,
@@ -202,13 +250,27 @@ export interface ApiVideo {
 export interface VideoListParams {
 	status?: 'draft' | 'published' | 'flagged';
 	category?: string;
+	q?: string;
+	date_from?: string;
+	date_to?: string;
 	random?: number;
 	limit?: number;
 }
 
+export interface VideoStats {
+	publishedCount: number;
+	totalViews: number;
+	totalLikes: number;
+	flaggedCount: number;
+}
+
 export const videosApi = {
 	list: (params: VideoListParams = {}) => get<ApiVideo[]>(`/api/videos${buildQuery({ ...params })}`),
+	exportUrl: (params: VideoListParams = {}) => `/api/videos/export${buildQuery({ ...params })}`,
 	get: (id: string) => get<ApiVideo>(`/api/videos/${id}`),
+	// Real SQL COUNT/SUM aggregate (admin/staff, analytics:view only) --
+	// mirrors photosApi.stats() exactly.
+	stats: () => get<VideoStats>('/api/videos/stats'),
 	getUploadUrl: (filename: string, contentType: string, sizeBytes: number, durationSeconds: number) =>
 		post<{ objectKey: string; uploadUrl: string; publicUrl: string }>('/api/videos/upload-url', {
 			filename,
@@ -280,7 +342,16 @@ export const commentsApi = {
 	create: (photoId: string, text: string, parentId?: string) =>
 		post<ApiComment>(`/api/photos/${photoId}/comments`, { text, parent_id: parentId ?? null }),
 	// Moderation (comments:moderate only):
-	listAll: () => get<ApiAdminComment[]>('/api/comments'),
+	listAll: (params: ListFilterParams = {}) => get<ApiAdminComment[]>(`/api/comments${buildQuery({ ...params })}`),
+	exportUrl: (params: ListFilterParams = {}) => `/api/comments/export${buildQuery({ ...params })}`,
+	// Real SQL COUNT (admin/staff, analytics:view only) -- use this for a
+	// dashboard total instead of listAll(), which has no limit param and
+	// fetches every comment just to take its length.
+	stats: () => get<{ count: number }>('/api/comments/stats'),
+	// Real SQL COUNT scoped to the logged-in customer's own comments --
+	// use this instead of fetching every published photo's comment tree
+	// and walking it client-side to count authorId matches.
+	myCount: () => get<{ count: number }>('/api/comments/mine/count'),
 	setFlagged: (id: string, flagged: boolean) =>
 		request<MessageResponse>(`/api/comments/${id}`, { method: 'PATCH', body: JSON.stringify({ flagged }) }),
 	remove: (id: string) => del<MessageResponse>(`/api/comments/${id}`)
@@ -310,6 +381,18 @@ export interface ApiConversationMessage {
 	timestamp: string;
 }
 
+export interface ApiQuote {
+	id: string;
+	conversationId: string;
+	createdByName: string;
+	description: string;
+	amountCents: number;
+	currency: string;
+	status: 'pending' | 'accepted' | 'declined' | 'withdrawn';
+	createdAt: string;
+	respondedAt: string | null;
+}
+
 export interface ApiConversation {
 	id: string;
 	customerId: string;
@@ -318,6 +401,7 @@ export interface ApiConversation {
 	subject: string;
 	status: 'new' | 'in_progress' | 'resolved';
 	messages: ApiConversationMessage[];
+	quotes: ApiQuote[];
 	updatedAt: string;
 }
 
@@ -326,11 +410,28 @@ export const conversationsApi = {
 	listMine: () => get<ApiConversation[]>('/api/conversations/mine'),
 	create: (subject: string, text: string) => post<ApiConversation>('/api/conversations', { subject, text }),
 	// Admin/staff side (requests:respond only):
-	listAll: () => get<ApiConversation[]>('/api/conversations'),
+	listAll: (params: ListFilterParams = {}) => get<ApiConversation[]>(`/api/conversations${buildQuery({ ...params })}`),
+	exportUrl: (params: ListFilterParams = {}) => `/api/conversations/export${buildQuery({ ...params })}`,
+	// Real SQL COUNT of non-resolved conversations -- use this for a
+	// dashboard total instead of listAll(), which fetches every
+	// conversation and every message in each one just to filter/count.
+	stats: () => get<{ openCount: number }>('/api/conversations/stats'),
 	setStatus: (id: string, status: ApiConversation['status']) =>
 		request<ApiConversation>(`/api/conversations/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
 	// Shared -- works for either side, backend resolves who's calling:
-	reply: (id: string, text: string) => post<ApiConversation>(`/api/conversations/${id}/messages`, { text })
+	reply: (id: string, text: string) => post<ApiConversation>(`/api/conversations/${id}/messages`, { text }),
+	// Quotes -- a lightweight, non-payment-processing offer attached to
+	// a conversation. All four return the whole updated conversation
+	// (quotes embedded), same as reply()/setStatus() already do, so the
+	// caller just replaces its local copy.
+	createQuote: (id: string, description: string, amount: number, currency = 'NGN') =>
+		post<ApiConversation>(`/api/conversations/${id}/quotes`, { description, amount, currency }),
+	acceptQuote: (conversationId: string, quoteId: string) =>
+		post<ApiConversation>(`/api/conversations/${conversationId}/quotes/${quoteId}/accept`, {}),
+	declineQuote: (conversationId: string, quoteId: string) =>
+		post<ApiConversation>(`/api/conversations/${conversationId}/quotes/${quoteId}/decline`, {}),
+	withdrawQuote: (conversationId: string, quoteId: string) =>
+		post<ApiConversation>(`/api/conversations/${conversationId}/quotes/${quoteId}/withdraw`, {})
 };
 
 // ---- AI (describe-media) ----
@@ -416,6 +517,11 @@ export interface ApiAdminChatThreadDetail {
 
 export const adminChatApi = {
 	listThreads: () => get<ApiAdminChatThread[]>('/api/admin/chat/threads'),
+	// Count of threads waiting for a human to pick up (mode ===
+	// 'pending_admin') -- excludes threads still fully AI-handled and
+	// threads someone already claimed, so this is specifically "needs
+	// attention right now", not the full queue tab's thread count.
+	stats: () => get<{ waitingCount: number }>('/api/admin/chat/stats'),
 	getThread: (threadId: string) => get<ApiAdminChatThreadDetail>(`/api/admin/chat/threads/${threadId}`),
 	reply: (threadId: string, text: string) =>
 		post<ApiAdminChatThreadDetail>(`/api/admin/chat/threads/${threadId}/reply`, { text }),
@@ -428,6 +534,38 @@ export const adminChatApi = {
 			method: 'PATCH',
 			body: JSON.stringify({ mode })
 		})
+};
+
+// ---- Customers (/api/customers/*) -- admin only ----
+
+export interface ApiCustomer {
+	id: string;
+	email: string;
+	name: string;
+	avatarInitials: string;
+	emailVerified: boolean;
+	isActive: boolean;
+	createdAt: string;
+}
+
+export interface CustomerListParams {
+	q?: string;
+	is_active?: boolean;
+	date_from?: string;
+	date_to?: string;
+	limit?: number;
+}
+
+export const customersApi = {
+	list: ({ is_active, ...rest }: CustomerListParams = {}) =>
+		get<ApiCustomer[]>(
+			`/api/customers${buildQuery({ ...rest, is_active: is_active === undefined ? undefined : String(is_active) })}`
+		),
+	exportUrl: ({ is_active, ...rest }: CustomerListParams = {}) =>
+		`/api/customers/export${buildQuery({ ...rest, is_active: is_active === undefined ? undefined : String(is_active) })}`,
+	stats: () => get<{ totalCount: number }>('/api/customers/stats'),
+	setActive: (id: string, isActive: boolean) =>
+		request<ApiCustomer>(`/api/customers/${id}`, { method: 'PATCH', body: JSON.stringify({ isActive }) })
 };
 
 // ---- Notifications ----

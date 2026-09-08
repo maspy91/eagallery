@@ -77,3 +77,39 @@ async def send_staff_invite_email(to_email: str, token: str) -> bool:
         f"You've been invited to {settings.APP_NAME}",
         f"You've been invited to join the team. Set your password here: {url}",
     )
+
+
+async def send_comment_reply_email(to_email: str, replier_name: str, media_title: str, href: str) -> bool:
+    settings = get_settings()
+    url = f"{settings.FRONTEND_URL}{href}"
+    return await _send(
+        to_email,
+        f"{replier_name} replied to your comment on {settings.APP_NAME}",
+        f"{replier_name} replied to your comment on \"{media_title}\".\n\nView it here: {url}",
+    )
+
+
+async def send_conversation_reply_email(to_email: str, sender_name: str, subject: str, href: str) -> bool:
+    settings = get_settings()
+    url = f"{settings.FRONTEND_URL}{href}"
+    return await _send(
+        to_email,
+        f"{sender_name} replied to your request on {settings.APP_NAME}",
+        f'{sender_name} replied to your request "{subject}".\n\nView it here: {url}',
+    )
+
+
+def format_money(amount_cents: int, currency: str) -> str:
+    return f"{currency} {amount_cents / 100:,.2f}"
+
+
+async def send_quote_email(to_email: str, sender_name: str, subject: str, amount_cents: int, currency: str, href: str) -> bool:
+    settings = get_settings()
+    url = f"{settings.FRONTEND_URL}{href}"
+    amount = format_money(amount_cents, currency)
+    return await _send(
+        to_email,
+        f"You've received a quote for \"{subject}\" — {settings.APP_NAME}",
+        f'{sender_name} sent you a quote of {amount} for your request "{subject}".\n\n'
+        f"Review it and accept or decline here: {url}",
+    )

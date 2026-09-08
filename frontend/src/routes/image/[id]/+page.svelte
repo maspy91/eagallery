@@ -4,6 +4,15 @@
 	import CommentSection from '$lib/components/CommentSection.svelte';
 	import { currentUser, authChecked } from '$lib/stores/auth';
 	import { photosApi, type ApiPhoto } from '$lib/api';
+	import type { PageData } from './$types';
+
+	// Server-loaded via +page.server.ts specifically so Open Graph tags
+	// below are present in the actual first-response HTML for link-
+	// preview crawlers, which don't run the client-side load() below.
+	// Independent of `item` -- see the server load's comments for why
+	// they're two separate fetches to two separate (view-count-free vs.
+	// not) backend endpoints.
+	export let data: PageData;
 
 	$: id = $page.params.id;
 
@@ -68,7 +77,19 @@
 </script>
 
 <svelte:head>
-	<title>{item ? `${item.title} — EddyArt Gallery` : 'Not found — EddyArt Gallery'}</title>
+	<title>{item?.title ?? data.meta?.title ? `${item?.title ?? data.meta?.title} — EddyArt` : 'Not found — EddyArt'}</title>
+	{#if data.meta}
+		<meta name="description" content={data.meta.description} />
+		<meta property="og:type" content="website" />
+		<meta property="og:title" content="{data.meta.title} — EddyArt" />
+		<meta property="og:description" content={data.meta.description} />
+		<meta property="og:image" content={data.meta.image} />
+		<meta property="og:url" content={$page.url.href} />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content="{data.meta.title} — EddyArt" />
+		<meta name="twitter:description" content={data.meta.description} />
+		<meta name="twitter:image" content={data.meta.image} />
+	{/if}
 </svelte:head>
 
 {#if loading}

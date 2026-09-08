@@ -34,13 +34,15 @@ function toAppUser(apiUser: {
 	name: string;
 	role: 'admin' | 'staff' | 'customer';
 	avatarInitials: string;
+	emailVerified: boolean;
 }): AppUser {
 	return {
 		id: apiUser.id,
 		email: apiUser.email,
 		name: apiUser.name,
 		role: apiUser.role,
-		avatarInitials: apiUser.avatarInitials
+		avatarInitials: apiUser.avatarInitials,
+		emailVerified: apiUser.emailVerified
 	};
 }
 
@@ -103,6 +105,41 @@ export async function acceptStaffInvite(token: string, password: string) {
 	const user = await adminApi.acceptInvite(token, password);
 	currentUser.set(toAppUser(user));
 	return toAppUser(user);
+}
+
+// The next three actions work for whichever side is currently logged
+// in -- routes to customerApi or adminApi based on the current session's
+// role, same pattern logout() already uses below, since both roles have
+// an identical set of profile-management endpoints (see
+// backend/app/routers/{customer,admin}_auth.py).
+
+function isAdminSide(): boolean {
+	return ['admin', 'staff'].includes(get(currentUser)?.role ?? '');
+}
+
+export async function updateProfileName(name: string) {
+	const user = isAdminSide() ? await adminApi.updateProfile(name) : await customerApi.updateProfile(name);
+	currentUser.set(toAppUser(user));
+	return toAppUser(user);
+}
+
+export async function changeEmail(email: string, currentPassword: string) {
+	const user = isAdminSide()
+		? await adminApi.changeEmail(email, currentPassword)
+		: await customerApi.changeEmail(email, currentPassword);
+	currentUser.set(toAppUser(user));
+	return toAppUser(user);
+}
+
+export async function changePassword(currentPassword: string, newPassword: string) {
+	if (isAdminSide()) {
+		await adminApi.changePassword(currentPassword, newPassword);
+	} else {
+		await customerApi.changePassword(currentPassword, newPassword);
+	}
+	// No store update -- name/email/role are unaffected by a password
+	// change, and the session cookie stays valid (see the backend
+	// endpoint's docstring for why it doesn't force a fresh sign-in).
 }
 
 export async function logout() {

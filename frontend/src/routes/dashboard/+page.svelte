@@ -1,17 +1,14 @@
 <script lang="ts">
 	// "Unread notifications" reads the real notifications store.
 	// "Open conversations" fetches real data via conversationsApi.listMine().
-	// "Post threads you're in" fetches real data too now -- see the
-	// onMount comment below for how, and why it isn't a single API call.
+	// "Post threads you're in" uses commentsApi.myCount() -- a single
+	// indexed SQL COUNT scoped to this customer's own comments.
 
 	import { onMount } from 'svelte';
 	import { Bell, Inbox, MessagesSquare, Plus } from '@lucide/svelte';
 	import { currentUser } from '$lib/stores/auth';
 	import { notifications } from '$lib/stores/notifications';
-	import { galleryItems } from '$lib/data/mock';
-	import { conversationsApi, photosApi, commentsApi, type ApiConversation } from '$lib/api';
-
-	$: myId = $currentUser?.id;
+	import { conversationsApi, commentsApi, type ApiConversation } from '$lib/api';
 
 	$: unreadNotifications = $notifications.filter((n) => !n.read);
 
@@ -25,36 +22,21 @@
 			// leave at 0 -- not worth surfacing an error for a dashboard stat card
 		}
 
-		// Was reading mockComments (static demo data) and counting authorId
-		// matches recursively through every reply -- disconnected from any
-		// real customer's actual comments. Same "no single endpoint for a
-		// customer's own comments" constraint as dashboard/conversations,
-		// so this fetches each published photo's comment tree and counts
-		// matches (root comments and replies alike, matching the original
-		// recursive-walk semantics). Bounded by photosApi.list()'s 100-row
-		// cap.
-		if (!myId) return;
+		// Was fetching up to 100 published photos, then every comment
+		// tree on each one, then recursively walking each tree client-
+		// side to count authorId matches -- an N+1 fetch pattern that
+		// got slower as the catalog and comment volume grew. Now one
+		// query; not logged in as a customer just leaves this at 0
+		// (the 401 is expected and not worth surfacing here).
 		try {
-			const photos = await photosApi.list({ status: 'published', limit: 100 });
-			const commentLists = await Promise.all(
-				photos.map((p) => commentsApi.list(p.id).catch(() => []))
-			);
-			let count = 0;
-			const walk = (nodes: { authorId: string | null; replies: unknown[] }[]) => {
-				for (const c of nodes as { authorId: string | null; replies: typeof nodes }[]) {
-					if (c.authorId === myId) count++;
-					if (c.replies.length) walk(c.replies as typeof nodes);
-				}
-			};
-			for (const list of commentLists) walk(list);
-			myThreadCount = count;
+			myThreadCount = (await commentsApi.myCount()).count;
 		} catch {
 			// leave at 0, same reasoning as the conversations count above
 		}
 	});
 </script>
 
-<svelte:head><title>Dashboard — EddyArt Gallery</title></svelte:head>
+<svelte:head><title>Dashboard — EddyArt</title></svelte:head>
 
 <div class="space-y-8">
 	<div>
@@ -120,11 +102,9 @@
 		</div>
 	{/if}
 
-	{#if galleryItems.length > 0}
-		<div class="glass elevated rounded-xl p-6">
-			<h2 class="text-lg font-semibold text-foreground mb-1">Browse the gallery</h2>
-			<p class="text-sm text-muted-foreground mb-4">Leave a comment on any item — you'll get notified when someone replies.</p>
-			<a href="/" class="text-sm text-primary hover:underline">Go to gallery →</a>
-		</div>
-	{/if}
+	<div class="glass elevated rounded-xl p-6">
+		<h2 class="text-lg font-semibold text-foreground mb-1">Browse the gallery</h2>
+		<p class="text-sm text-muted-foreground mb-4">Leave a comment on any item — you'll get notified when someone replies.</p>
+		<a href="/" class="text-sm text-primary hover:underline">Go to gallery →</a>
+	</div>
 </div>
