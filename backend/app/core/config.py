@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_samesite: str = "lax"
 
+    MAX_PHOTO_SIZE_BYTES: int = 10485760   # 10MB
+    SUPABASE_VIDEO_BUCKET: str | None = None
+    MAX_VIDEO_SIZE_BYTES: int = 5242880    # 5MB
+    MAX_VIDEO_DURATION_SECONDS: int = 8
+
     # ---- Application ----
     APP_NAME: str = "Future Gallery"
     DEBUG: bool = False
