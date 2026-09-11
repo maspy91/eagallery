@@ -142,12 +142,12 @@
 			<p>
 				Developed by
 				<a
-					href="https://github.com"
+					href="#"
 					target="_blank"
 					rel="noopener noreferrer"
 					class="text-primary hover:underline"
 				>
-					Eddy
+					MIIM
 				</a>
 			</p>
 		</div>
