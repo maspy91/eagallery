@@ -20,10 +20,10 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_samesite: str = "lax"
 
-    MAX_PHOTO_SIZE_BYTES: int = 10485760   # 10MB
+    MAX_PHOTO_SIZE_BYTES: int 
     SUPABASE_VIDEO_BUCKET: str | None = None
-    MAX_VIDEO_SIZE_BYTES: int = 5242880    # 5MB
-    MAX_VIDEO_DURATION_SECONDS: int = 8
+    MAX_VIDEO_SIZE_BYTES: int 
+    MAX_VIDEO_DURATION_SECONDS: int
 
     # ---- Application ----
     APP_NAME: str = "Future Gallery"
@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     MIN_PASSWORD_LENGTH: int = 8
 
     # ---- Cloudflare Turnstile ----
-    TURNSTILE_ENABLED: bool = False
+    TURNSTILE_ENABLED: bool 
     TURNSTILE_SECRET: str | None = None
 
     # ---- Email (Mailtrap in staging, real sender in prod) ----
@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str | None = None
     SMTP_PASSWORD: str | None = None
     SMTP_FROM_EMAIL: str = "noreply@futuregallery.app"
-    SMTP_FROM_NAME: str = "Future Gallery"
+    SMTP_FROM_NAME: str = "Gallery"
     SMTP_STARTTLS: bool = True
 #   
     # ---- Supabase Storage (Photo Storage) ----
