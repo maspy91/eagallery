@@ -111,7 +111,7 @@
 		<div class="w-[22rem] max-w-[calc(100vw-3rem)] h-[32rem] max-h-[calc(100vh-8rem)] glass elevated rounded-2xl shadow-xl flex flex-col overflow-hidden animate-fade-in">
 			<div class="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
 				<div>
-					<p class="font-semibold text-foreground text-sm">Chat with Lucy</p>
+					<p class="font-semibold text-foreground text-sm">Chat with Alicia</p>
 					<p class="text-xs text-muted-foreground">
 						{#if mode === 'human'}
 							A team member is here

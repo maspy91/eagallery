@@ -1,7 +1,7 @@
 # backend/app/routers/comments.py
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -13,7 +13,14 @@ from app.models.comment import Comment
 from app.models.photo import Photo
 from app.models.user import User
 from app.models.video import Video
-from app.schemas.comments import AdminCommentOut, CommentCreateRequest, CommentOut, MessageResponse, ModerateCommentRequest
+from app.schemas.comments import (
+    AdminCommentOut,
+    CommentCountOut,
+    CommentCreateRequest,
+    CommentOut,
+    MessageResponse,
+    ModerateCommentRequest,
+)
 
 # Three routers, same file: one nested under /api/photos/{photo_id}/comments
 # and one under /api/videos/{video_id}/comments (public read + create, each
@@ -215,6 +222,21 @@ async def create_video_comment(
 
 
 # ---- Moderation: admin/staff, cross-photo, flat (comments:moderate) ----
+
+
+@moderation_router.get(
+    "/stats",
+    response_model=CommentCountOut,
+    dependencies=[Depends(require_permission("analytics:view"))],
+)
+async def get_comment_stats(db: AsyncSession = Depends(get_db)):
+    """Single aggregate COUNT for the admin dashboard overview -- mirrors
+    get_photo_stats/get_video_stats in routers/photos.py / routers/videos.py
+    exactly, same reasoning: correct no matter how many comments exist.
+    Counts every comment across both photos and videos (this router is the
+    cross-media moderation view), not just top-level ones."""
+    result = await db.execute(select(func.count()).select_from(Comment))
+    return CommentCountOut(count=result.scalar_one())
 
 
 @moderation_router.get("", response_model=list[AdminCommentOut], dependencies=[Depends(require_permission("comments:moderate"))])
