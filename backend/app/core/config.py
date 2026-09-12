@@ -50,13 +50,25 @@ class Settings(BaseSettings):
     EMAIL_VERIFICATION_TOKEN_TTL_HOURS: int = 24
     PASSWORD_RESET_TOKEN_TTL_MINUTES: int = 30
 
+    # "smtp" or "resend" -- picks which branch core/email.py's _send()
+    # takes. Switch providers by changing this one value in .env, no code
+    # change needed. Unrecognized values fall back to "smtp" (see _send()).
+    EMAIL_PROVIDER: str = "resend"
+
     SMTP_HOST: str = "sandbox.smtp.mailtrap.io"
     SMTP_PORT: int = 2525
     SMTP_USERNAME: str | None = None
     SMTP_PASSWORD: str | None = None
-    SMTP_FROM_EMAIL: str = "noreply@futuregallery.app"
+    SMTP_FROM_EMAIL: str = "noreply@eddyarts.app"
     SMTP_FROM_NAME: str = "Gallery"
     SMTP_STARTTLS: bool = True
+
+    # Resend (https://resend.com) -- HTTP API alternative to SMTP, useful
+    # on hosts like Render's free tier that block outbound SMTP ports
+    # entirely. Reuses SMTP_FROM_EMAIL/SMTP_FROM_NAME for the From header
+    # rather than duplicating them -- that's provider-agnostic, and Resend
+    # requires it to be on a domain verified in your Resend dashboard.
+    RESEND_API_KEY: str | None = None
 #   
     # ---- Supabase Storage (Photo Storage) ----
     SUPABASE_URL: str | None = None

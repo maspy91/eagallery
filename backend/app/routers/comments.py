@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_optional_customer, require_permission
+from app.core.deps import get_current_customer, get_optional_customer, require_permission
 from app.core.ip import get_client_ip
 from app.core.notifications import create_notification
 from app.core.rate_limit import check_and_increment
@@ -236,6 +236,23 @@ async def get_comment_stats(db: AsyncSession = Depends(get_db)):
     Counts every comment across both photos and videos (this router is the
     cross-media moderation view), not just top-level ones."""
     result = await db.execute(select(func.count()).select_from(Comment))
+    return CommentCountOut(count=result.scalar_one())
+
+
+@moderation_router.get("/mine/count", response_model=CommentCountOut)
+async def get_my_comment_count(
+    db: AsyncSession = Depends(get_db),
+    customer: User = Depends(get_current_customer),
+):
+    """Count of comments authored by the logged-in customer, across both
+    photos and videos -- backs the dashboard's "Post threads you're in"
+    figure (src/routes/dashboard/+page.svelte). Requires login (unlike the
+    public list/create routes above, which allow anonymous commenting)
+    since there's no "mine" without an identity. Placed on this router
+    (prefix /api/comments) rather than customer_auth.py because it's a
+    comment-table aggregate, same reasoning as get_comment_stats above --
+    just scoped to one author instead of everyone."""
+    result = await db.execute(select(func.count()).select_from(Comment).where(Comment.author_id == customer.id))
     return CommentCountOut(count=result.scalar_one())
 
 

@@ -2,6 +2,7 @@ import logging
 from email.mime.text import MIMEText
 
 import aiosmtplib
+import httpx
 
 from app.core.config import get_settings
 
@@ -9,6 +10,21 @@ logger = logging.getLogger(__name__)
 
 
 async def _send(to_email: str, subject: str, body: str) -> bool:
+    settings = get_settings()
+
+    # Provider is picked by EMAIL_PROVIDER in .env -- "resend" or "smtp",
+    # switchable with no code change. Anything else (including unset)
+    # falls back to "smtp", matching the field's own default, so an old
+    # .env with no EMAIL_PROVIDER line at all keeps working exactly as
+    # before this switch was added.
+    provider = (settings.EMAIL_PROVIDER or "smtp").strip().lower()
+
+    if provider == "resend":
+        return await _send_via_resend(to_email, subject, body)
+    return await _send_via_smtp(to_email, subject, body)
+
+
+async def _send_via_smtp(to_email: str, subject: str, body: str) -> bool:
     settings = get_settings()
 
     # Gates on whether SMTP is actually configured, not on DEBUG -- the
@@ -46,6 +62,39 @@ async def _send(to_email: str, subject: str, body: str) -> bool:
         return True
     except Exception as e:
         logger.error(f"Failed to send email to {to_email} via {settings.SMTP_HOST}:{settings.SMTP_PORT}: {e}")
+        return False
+
+
+async def _send_via_resend(to_email: str, subject: str, body: str) -> bool:
+    settings = get_settings()
+
+    # Same "not configured -> log instead" fallback as _send_via_smtp,
+    # just gated on the one credential Resend needs instead of four.
+    if not settings.RESEND_API_KEY:
+        logger.info(f"[No RESEND_API_KEY configured -- logging instead] To: {to_email} | Subject: {subject}\n{body}")
+        return True
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "from": f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL}>",
+                    "to": [to_email],
+                    "subject": subject,
+                    "text": body,
+                },
+            )
+        if response.status_code >= 400:
+            logger.error(f"Failed to send email to {to_email} via Resend: {response.status_code} {response.text}")
+            return False
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send email to {to_email} via Resend: {e}")
         return False
 
 
