@@ -120,9 +120,14 @@
 
 {#if !videosLoading && !videosLoadError && featuredVideos.length > 0}
 	<section class="max-w-7xl mx-auto px-4 pb-20">
-		<div class="mb-12 animate-fade-in">
-			<h2 class="text-4xl font-bold text-foreground mb-4">Featured Videos</h2>
-			<p class="text-lg text-muted-foreground">Short clips showing our products in action</p>
+		<div class="mb-12 animate-fade-in flex items-end justify-between gap-4 flex-wrap">
+			<div>
+				<h2 class="text-4xl font-bold text-foreground mb-4">Featured Videos</h2>
+				<p class="text-lg text-muted-foreground">Short clips showing our products in action</p>
+			</div>
+			<a href="/videos" class="text-sm font-medium text-primary hover:underline whitespace-nowrap">
+				View all videos →
+			</a>
 		</div>
 
 		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

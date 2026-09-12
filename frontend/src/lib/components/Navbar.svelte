@@ -39,6 +39,15 @@
 				Gallery
 			</a>
 
+			<a
+				href="/videos"
+				class="transition-smooth hover:text-primary {$page.url.pathname.startsWith('/video')
+					? 'text-primary'
+					: 'text-muted-foreground'}"
+			>
+				Videos
+			</a>
+
 			{#if isStaffOrAdmin}
 				<a
 					href="/admin"
@@ -159,6 +168,17 @@
 					: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
 			>
 				Gallery
+			</a>
+
+			<a
+				href="/videos"
+				class="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-smooth {$page.url.pathname.startsWith(
+					'/video'
+				)
+					? 'bg-primary/10 text-primary'
+					: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+			>
+				Videos
 			</a>
 
 			{#if isStaffOrAdmin || isCustomer}

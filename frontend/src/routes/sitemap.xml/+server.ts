@@ -41,6 +41,7 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 
 	const entries = [
 		{ loc: `${url.origin}/`, changefreq: 'daily', priority: '1.0' },
+		{ loc: `${url.origin}/videos`, changefreq: 'daily', priority: '0.9' },
 		...photos.map((p) => ({ loc: `${url.origin}/image/${p.id}`, changefreq: 'weekly', priority: '0.8' })),
 		...videos.map((v) => ({ loc: `${url.origin}/video/${v.id}`, changefreq: 'weekly', priority: '0.8' }))
 	];
